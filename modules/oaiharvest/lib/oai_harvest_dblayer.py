@@ -16,48 +16,10 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
 
-
-from invenio.legacy.dbquery import run_sql, serialize_via_marshal
-
 import time
 
-
-def get_oai_src_by_id(oai_src_id):
-    """
-    Returns a row parameters for a given id.
-    """
-    return get_oai_src({'id': oai_src_id})
-
-def get_oai_src_by_name(oai_src_name):
-    """
-    Returns a row parameters for a source name.
-    """
-    return get_oai_src({'name': oai_src_name})
-
-def get_all_oai_src():
-    return get_oai_src()
-
-def get_oai_src(params = {}):
-    """
-    Returns a row parameters for a source name.
-    """
-    sql = """SELECT id, baseurl, metadataprefix, arguments,
-                    comment, name, lastrun,
-                    frequency, postprocess, setspecs
-               FROM oaiHARVEST"""
-    try:
-        sql_params = []
-        for key, value in params.items():
-            if "WHERE" not in sql:
-                sql += "WHERE"
-            else:
-                sql += " AND"
-            sql += " %s=%s"
-            sql_params.append(key, value)
-        res = run_sql(sql, sql_params)
-        return res
-    except StandardError, e:
-        return ""
+from invenio.legacy.dbquery import run_sql, serialize_via_marshal
+from invenio.legacy.bibrecord import create_records, record_extract_oai_id
 
 class HistoryEntry:
     date_harvested = None
@@ -87,6 +49,34 @@ class HistoryEntry:
                "bibupload_task_id: " + str(self.bibupload_task_id) + ', ' + \
                "inserted_to_db: " + str(self.inserted_to_db) + ', ' + \
                "oai_src_id: " + str(self.oai_src_id) + ', ' + ")"
+
+
+def update_lastrun(index):
+    """ A method that updates the lastrun of a repository
+        successfully harvested """
+    try:
+        today = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        sql = 'UPDATE oaiHARVEST SET lastrun=%s WHERE id=%s'
+        run_sql(sql, (today, index))
+        return 1
+    except StandardError, e:
+        return (0, e)
+
+
+def create_oaiharvest_log_str(task_id, oai_src_id, xml_content):
+    """
+    Function which creates the harvesting logs
+    @param task_id bibupload task id
+    """
+    try:
+        records = create_records(xml_content)
+        for record in records:
+            oai_id = record_extract_oai_id(record[0])
+            query = "INSERT INTO oaiHARVESTLOG (id_oaiHARVEST, oai_id, date_harvested, bibupload_task_id) VALUES (%s, %s, NOW(), %s)"
+            run_sql(query, (str(oai_src_id), str(oai_id), str(task_id)))
+    except Exception, msg:
+        print "Logging exception : %s   " % (str(msg),)
+
 
 def get_history_entries_raw(query_suffix, sqlparameters):
     """
@@ -193,6 +183,59 @@ def get_entry_logs_size(oai_id):
 ##################################################################
 ### Here the functions to retrieve, modify, delete and add sources
 ##################################################################
+
+def get_oai_src_by_id(oai_src_id):
+    """
+    Returns a list of dictionaries with source parameters for a given id.
+    """
+    return get_oai_src({'id': oai_src_id})
+
+
+def get_oai_src_by_name(oai_src_name):
+    """
+    Returns a list of dictionaries with source parameters for a source name.
+    """
+    return get_oai_src({'name': oai_src_name})
+
+
+def get_all_oai_src():
+    """
+    Returns a list of dictionaries with source parameters for a given id.
+    """
+    return get_oai_src()
+
+
+def get_oai_src(params={}):
+    """
+    Returns a list of dictionaries each representing a DB row for a OAI source.
+    """
+    sql = """SELECT id, baseurl, metadataprefix, arguments,
+             comment, name, lastrun,
+             frequency, postprocess, setspecs
+             FROM oaiHARVEST"""
+    sql_params = []
+    if params:
+        for key, value in params.items():
+            if "WHERE" not in sql:
+                sql += " WHERE"
+            else:
+                sql += " AND"
+            sql += " " + key + "=%s"
+            sql_params.append(value)
+    new_res = []
+    res = run_sql(sql, sql_params, with_dict=True)
+    if res:
+        for result in res:
+            for key, value in result.iteritems():
+                if value is None:
+                    if key == "arguments":
+                        value = {}
+                    else:
+                        value = ""
+                    result[key] = value
+            new_res.append(result)
+    return new_res
+
 
 def modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix,
                    oai_src_frequency, oai_src_post, oai_src_comment,
