@@ -22,8 +22,10 @@ __revision__ = "$Id$"
 
 import cgi
 import datetime
+
 from invenio.config import CFG_SITE_URL, CFG_SITE_LANG
 from invenio.utils.html import nmtoken_from_string
+
 from invenio.utils.url import create_html_link
 from invenio.base.i18n import gettext_set_language
 
@@ -703,3 +705,27 @@ class Template:
             "baseurl" : CFG_SITE_URL,
             "scriptsstring" : jquery_scripts_string
        }
+
+    def tmpl_should_process_record_with_mode(self, marcxml, postmode):
+        """
+        Return True if the given C{marcxml} should be processed in the
+        given C{mode}.
+
+        Mode can take values (string):
+          - p: plot extraction
+          - r: reference extraction
+          - a: author list parsing
+          - t: file (fulltext attachement)
+
+        @param marcxml: the record currently being processed
+        @type marcxml: string
+        @param postmode: processing mode currently executed
+        @type postmode: string
+        """
+        if CFG_CERN_SITE:
+            if not 'CERN-' in marcxml and \
+                   'http://export.arxiv.org/oai2' in marcxml:
+                # we skip non-CERN records when harvesting from ArXiv
+                return False
+
+        return True
