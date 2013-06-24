@@ -44,6 +44,7 @@ Examples:
 
 try:
     import sys
+    from invenio.flaskshell import *
     from invenio.oai_harvest_daemon import main
 except ImportError, e:
     print "Error: %s" % e
