@@ -32,15 +32,18 @@ import calendar
 from invenio.errorlib import register_exception
 from invenio import oai_harvest_getter
 
-from invenio.config import (CFG_ETCDIR, CFG_SITE_URL,
-                            CFG_SITE_ADMIN_EMAIL
-                            )
-from invenio.bibrecord import (record_get_field_instances,
-                               record_modify_subfield
-                               )
+from invenio.base.config import (CFG_ETCDIR, CFG_SITE_URL,
+                                 CFG_SITE_ADMIN_EMAIL
+                                 )
+from invenio.legacy.bibrecord import (record_get_field_instances,
+                                      record_modify_subfield,
+                                      field_xml_output
+                                      )
 from invenio.shellutils import run_shell_command
-from invenio.textutils import translate_latex2unicode
+from invenio.utils.text import translate_latex2unicode
 from invenio.oai_harvest_dblayer import update_lastrun
+from invenio.bibcatalog import bibcatalog_system
+from invenio.bibtask import write_message
 
 ## precompile some often-used regexp for speed reasons:
 REGEXP_OAI_ID = re.compile("<identifier.*?>(.*?)<\/identifier>", re.DOTALL)
@@ -63,12 +66,12 @@ def get_nb_records_in_file(filename):
         nb = -1
     return nb
 
+
 def get_nb_records_in_string(string):
     """
     Return number of record in FILENAME that is either harvested or converted
     file. Useful for statistics.
     """
-    nb = -1
     nb = string.count("</record>")
     return nb
 
@@ -131,7 +134,7 @@ def remove_duplicates(harvested_file_list):
         harvested_records = REGEXP_RECORD.findall(data)
         for record in harvested_records:
             oai_identifier = REGEXP_OAI_ID.search(record)
-            if oai_identifier != None and oai_identifier.group(1) not in harvested_identifiers:
+            if oai_identifier and oai_identifier.group(1) not in harvested_identifiers:
                 updated_file_content.append("<record>%s</record>" % (record,))
                 harvested_identifiers.append(oai_identifier.group(1))
         updated_file_content.append("</ListRecords>\n</OAI-PMH>")
@@ -155,7 +158,7 @@ def add_timestamp_and_timelag(timestamp,
     timestamp = re.sub(r'\.[0-9]+$', '', timestamp)
     # first convert timestamp to Unix epoch seconds:
     timestamp_seconds = calendar.timegm(time.strptime(timestamp,
-        "%Y-%m-%d %H:%M:%S"))
+                                                      "%Y-%m-%d %H:%M:%S"))
     # now add them:
     result_seconds = timestamp_seconds + timelag
     result = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(result_seconds))
@@ -214,7 +217,7 @@ def translate_fieldvalues_from_latex(record, tag, code='', encoding='utf-8'):
         for subfield_code, subfield_value in subfields:
             if code == '' or subfield_code == code:
                 newvalue = translate_latex2unicode(subfield_value).encode(encoding)
-                record_modify_subfield(record, tag, subfield_code, newvalue, \
+                record_modify_subfield(record, tag, subfield_code, newvalue,
                                        subfield_index, field_position_global=field[4])
             subfield_index += 1
 
@@ -233,9 +236,9 @@ def compare_timestamps_with_tolerance(timestamp1,
     timestamp2 = re.sub(r'\.[0-9]+$', '', timestamp2)
     # first convert timestamps to Unix epoch seconds:
     timestamp1_seconds = calendar.timegm(time.strptime(timestamp1,
-        "%Y-%m-%d %H:%M:%S"))
+                                                       "%Y-%m-%d %H:%M:%S"))
     timestamp2_seconds = calendar.timegm(time.strptime(timestamp2,
-        "%Y-%m-%d %H:%M:%S"))
+                                                       "%Y-%m-%d %H:%M:%S"))
     # now compare them:
     if timestamp1_seconds < timestamp2_seconds - tolerance:
         return -1
@@ -245,9 +248,9 @@ def compare_timestamps_with_tolerance(timestamp1,
         return 0
 
 
-def generate_harvest_report(repository, harvested_identifier_list, \
-                            uploaded_task_ids=[], active_files_list=[], \
-                            task_specific_name="", current_task_id=-1, \
+def generate_harvest_report(repository, harvested_identifier_list,
+                            uploaded_task_ids=[], active_files_list=[],
+                            task_specific_name="", current_task_id=-1,
                             manual_harvest=False, error_happened=False):
     """
     Returns an applicable subject-line + text to send via e-mail or add to
@@ -271,31 +274,31 @@ def generate_harvest_report(repository, harvested_identifier_list, \
     if error_happened:
         subject += " with errors"
         text = \
-"""
-%(harvesting)s completed *with errors* from source named '%(name)s' (%(sourceurl)s) at %(ctime)s.
-In total %(total)d record(s) were harvested.
+            """
+            %(harvesting)s completed *with errors* from source named '%(name)s' (%(sourceurl)s) at %(ctime)s.
+            In total %(total)d record(s) were harvested.
 
-See harvest task log here for more information on the problems:
-%(harvesttasklink)s
+            See harvest task log here for more information on the problems:
+            %(harvesttasklink)s
 
-Please forward this mail to administrators. <%(admin_mail)s>
+            Please forward this mail to administrators. <%(admin_mail)s>
 
-----------
-Extra Info
-----------
+            ----------
+            Extra Info
+            ----------
 
-Harvest history for this source:
-%(siteurl)s/admin/oaiharvest/oaiharvestadmin.py/viewhistory?ln=no&oai_src_id=%(oai_src_id)s
+            Harvest history for this source:
+            %(siteurl)s/admin/oaiharvest/oaiharvestadmin.py/viewhistory?ln=no&oai_src_id=%(oai_src_id)s
 
-See state of uploaded records:
-%(uploadtasklinks)s
+            See state of uploaded records:
+            %(uploadtasklinks)s
 
-List of OAI IDs harvested:
-%(ids)s
+            List of OAI IDs harvested:
+            %(ids)s
 
-Records ready to upload are located here:
-%(files)s
-""" \
+            Records ready to upload are located here:
+            %(files)s
+            """ \
         % {
             'harvesting': harvesting_prefix,
             'admin_mail': CFG_SITE_ADMIN_EMAIL,
@@ -307,29 +310,29 @@ Records ready to upload are located here:
             'ids': '\n'.join([oaiid for ids in harvested_identifier_list for oaiid in ids]),
             'siteurl': CFG_SITE_URL,
             'oai_src_id': repository.id,
-            'harvesttasklink': "%s/admin/oaiharvest/oaiharvestadmin.py/viewtasklogs?ln=no&task_id=%s" \
+            'harvesttasklink': "%s/admin/oaiharvest/oaiharvestadmin.py/viewtasklogs?ln=no&task_id=%s"
                                % (CFG_SITE_URL, current_task_id),
-            'uploadtasklinks': '\n'.join(["%s/admin/oaiharvest/oaiharvestadmin.py/viewtasklogs?ln=no&task_id=%s" \
-                                           % (CFG_SITE_URL, task_id) for task_id in uploaded_task_ids]) or "None",\
+            'uploadtasklinks': '\n'.join(["%s/admin/oaiharvest/oaiharvestadmin.py/viewtasklogs?ln=no&task_id=%s"
+                                          % (CFG_SITE_URL, task_id) for task_id in uploaded_task_ids]) or "None",
         }
     else:
         text = \
-"""
-%(harvesting)s completed successfully from source named '%(name)s' (%(sourceurl)s) at %(ctime)s.
-In total %(total)d record(s) were harvested.
+            """
+            %(harvesting)s completed successfully from source named '%(name)s' (%(sourceurl)s) at %(ctime)s.
+            In total %(total)d record(s) were harvested.
 
-See harvest history here:
-%(siteurl)s/admin/oaiharvest/oaiharvestadmin.py/viewhistory?ln=no&oai_src_id=%(oai_src_id)s
+            See harvest history here:
+            %(siteurl)s/admin/oaiharvest/oaiharvestadmin.py/viewhistory?ln=no&oai_src_id=%(oai_src_id)s
 
-See state of uploaded records:
-%(uploadtasklinks)s
+            See state of uploaded records:
+            %(uploadtasklinks)s
 
-List of OAI IDs harvested:
-%(ids)s
+            List of OAI IDs harvested:
+            %(ids)s
 
-Records ready to upload are located here:
-%(files)s
-""" \
+            Records ready to upload are located here:
+            %(files)s
+            """ \
             % {
                 'harvesting': harvesting_prefix,
                 'name': fullname,
@@ -361,7 +364,7 @@ def record_extraction_from_file(path):
     list_of_records = []
 
     #will contains the header of the file ie: all lines before the first record
-    header=  ""
+    header = ""
 
     file = open(path,'r+')
 
@@ -402,10 +405,11 @@ def record_extraction_from_file(path):
 
     #Reassembling of the records and the footer and header
 
-    for i in range(0,len(list_of_records)):
+    for i in range(0, len(list_of_records)):
         list_of_records[i] = header+list_of_records[i]+footer
 
     return list_of_records
+
 
 def record_extraction(xml_string):
     """this function return only record
@@ -434,7 +438,7 @@ def harvest_step(repository, harvestpath, identifiers, dates):
                                                 harvestpath,
                                                 str(dates[0]),
                                                 str(dates[1]))
-    elif not dates and ((repository.lastrun is None) or (repository.lastrun=='')) and repository.frequency != 0:
+    elif not dates and (repository.lastrun is None or repository.lastrun == '') and repository.frequency != 0:
         # First time we harvest from this repository
         harvested_files_list = harvest_by_dates(repository, harvestpath)
         update_lastrun(repository.id)
@@ -445,7 +449,7 @@ def harvest_step(repository, harvestpath, identifiers, dates):
         ### i.e. lastrun+frequency>today
         timenow = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         lastrundate = re.sub(r'\.[0-9]+$', '',
-            str(repository.lastrun))  # remove trailing .00
+                             str(repository.lastrun))  # remove trailing .00
         timeinsec = int(repository.frequency) * 60 * 60
         updatedue = add_timestamp_and_timelag(lastrundate, timeinsec)
         proceed = compare_timestamps_with_tolerance(updatedue, timenow)
@@ -454,8 +458,8 @@ def harvest_step(repository, harvestpath, identifiers, dates):
             fromdate = str(repository.lastrun)
             # get rid of time of the day for the moment
             fromdate = fromdate.split()[0]
-            harvested_files_list = harvest_by_dates(repository, harvestpath, \
-                                                                fromdate=fromdate)
+            harvested_files_list = harvest_by_dates(repository, harvestpath,
+                                                    fromdate=fromdate)
             update_lastrun(repository.id)
         else:
             return []  # No actual error here.
@@ -476,14 +480,13 @@ def harvest_by_identifiers(repository, identifiers, harvestpath):
     """
     harvested_files_list = []
     count = 0
-    error_happened = 0
     for oai_identifier in identifiers:
         count += 1
         harvested_files_list.extend(oai_harvest_get(prefix=repository.metadataprefix,
-                                                        baseurl=repository.baseurl,
-                                                        harvestpath=harvestpath,
-                                                        verb="GetRecord",
-                                                        identifier=oai_identifier))
+                                                    baseurl=repository.baseurl,
+                                                    harvestpath=harvestpath,
+                                                    verb="GetRecord",
+                                                    identifier=oai_identifier))
     return harvested_files_list
 
 
@@ -549,11 +552,80 @@ def oai_harvest_get(prefix, baseurl, harvestpath,
             sets = [oai_set.strip() for oai_set in setspecs.split(' ')]
 
         harvested_files = oai_harvest_getter.harvest(network_location, path, http_param_dict, method, harvestpath,
-                                   sets, secure, user, password, cert_file, key_file)
+                                                     sets, secure, user, password, cert_file, key_file)
         if verb == "ListRecords":
             remove_duplicates(harvested_files)
         return harvested_files
     except (StandardError, oai_harvest_getter.InvenioOAIRequestError) as exce:
         register_exception()
         raise Exception("An error occurred while harvesting from %s: %s\n"
-                      % (baseurl, str(exce)))
+                        % (baseurl, str(exce)))
+
+
+def create_authorlist_ticket(matching_fields, identifier, queue):
+    """
+    This function will submit a ticket generated by UNDEFINED affiliations
+    in extracted authors from collaboration authorlists.
+
+    @param matching_fields: list of (tag, field_instances) for UNDEFINED nodes
+    @type matching_fields: list
+
+    @param identifier: OAI identifier of record
+    @type identifier: string
+
+    @param queue: the RT queue to send a ticket to
+    @type queue: string
+
+    @return: return the ID of the created ticket, or None on failure
+    @rtype: int or None
+    """
+    subject = "[OAI Harvest] UNDEFINED affiliations for record %s" % (identifier,)
+    text = """
+Harvested record with identifier %(ident)s has had its authorlist extracted and contains some UNDEFINED affiliations.
+
+To see the record, go here: %(baseurl)s/search?p=%(ident)s
+
+If the record is not there yet, try again later. It may take some time for it to load into the system.
+
+List of unidentified fields:
+%(fields)s
+    """ % {
+        'ident': identifier,
+        'baseurl': CFG_SITE_URL,
+        'fields': "\n".join([field_xml_output(field, tag) for tag, field_instances in matching_fields
+                             for field in field_instances])
+    }
+    return create_ticket(queue, subject, text)
+
+
+def create_ticket(queue, subject, text=""):
+    """
+    This function will submit a ticket using the configured BibCatalog system.
+
+    @param queue: the ticketing queue to send a ticket to
+    @type queue: string
+
+    @param subject: subject of the ticket
+    @type subject: string
+
+    @param text: the main text or body of the ticket. Optional.
+    @type text: string
+
+    @return: return the ID of the created ticket, or None on failure
+    @rtype: int or None
+    """
+    # Initialize BibCatalog connection as default user, if possible
+    if bibcatalog_system is not None:
+        bibcatalog_response = bibcatalog_system.check_system()
+    else:
+        bibcatalog_response = "No ticket system configured"
+    if bibcatalog_response != "":
+        write_message("BibCatalog error: %s\n" % (bibcatalog_response,))
+        return None
+
+    ticketid = bibcatalog_system.ticket_submit(subject=subject, queue=queue)
+    if text:
+        comment = bibcatalog_system.ticket_comment(None, ticketid, text)
+        if comment is None:
+            write_message("Error: commenting on ticket %s failed." % (str(ticketid),))
+    return ticketid

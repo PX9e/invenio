@@ -24,10 +24,8 @@ If started via CLI with --verb parameters, starts a manual single-shot
 harvesting. Otherwise starts a BibSched task for periodical harvesting
 of repositories defined in the OAI Harvest admin interface
 """
-
 __revision__ = "$Id$"
 
-import os
 import sys
 import getopt
 import getpass
@@ -36,16 +34,15 @@ import time
 import calendar
 import shutil
 import urlparse
-import random
 
 
-
-from invenio.config import (CFG_INSPIRE_SITE,
-                            CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
-                            CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN,
-                            CFG_SITE_SUPPORT_EMAIL)
+from invenio.base.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
+                                 CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN,
+                                 CFG_SITE_SUPPORT_EMAIL
+                                 )
 
 from invenio.oai_harvest_config import InvenioOAIHarvestWarning
+
 
 
 
@@ -60,6 +57,8 @@ from invenio.legacy.bibsched.bibtask import(task_get_task_param,
                                             task_sleep_now_if_required,
                                             task_update_progress,
                                             task_low_level_submission)
+
+
 from invenio.legacy.bibrecord import record_extract_oai_id, create_records, \
                               create_record, record_add_fields, \
                               record_delete_fields, record_xml_output, \
@@ -77,25 +76,33 @@ from invenio.legacy.bibedit.utils import record_find_matching_fields
 from invenio.legacy.bibcatalog.api import bibcatalog_system
 from invenio.ext.legacy.handler_flask import with_app_context
 
-from invenio.oai_harvest_dblayer import get_oai_src_by_name, get_all_oai_src, update_lastrun, create_oaiharvest_log_str
+from invenio.bibtask import (task_get_task_param,
+                             task_get_option,
+                             task_set_option,
+                             write_message,
+                             task_init
+                             )
 
-from invenio.oai_harvest_utils import get_nb_records_in_file, \
-                                      collect_identifiers, \
-                                      remove_duplicates, \
-                                      add_timestamp_and_timelag, \
-                                      find_matching_files, \
-                                      translate_fieldvalues_from_latex, \
-                                      compare_timestamps_with_tolerance, \
-                                      generate_harvest_report
+
+from invenio import oai_harvest_getter
+from invenio.ext.logging import register_exception
+
+
+
+from invenio.oai_harvest_utils import (compare_timestamps_with_tolerance,
+                                       generate_harvest_report)
 
 from invenio.webuser import email_valid_p
 from invenio.ext.email import send_email
 
-from invenio.bibworkflow_logging_model import (BibWorkflowEngineLog,
-                                               BibWorkflowObjectLog)
+from invenio.modules.workflows.models import (BibWorkflowEngineLog,
+                                              BibWorkflowObjectLog)
+from invenio.bibworkflow_api import start
+from invenio.bibworkflow_utils import InvenioWorkflowError
+
 import invenio.template
 
-run = lazy_import('invenio.bibworkflow_api:start')
+
 oaiharvest_templates = invenio.template.load('oai_harvest')
 
 
@@ -122,18 +129,22 @@ def task_run_core():
     start_time = time.time()
 
     try:
-        workflow = run('generic_harvesting_workflow', data=[123], stop_on_error=True)
-    except Exception as e:
+
+        workflow = start('generic_harvesting_workflow', data=[123], stop_on_error=True)
+
+    except InvenioWorkflowError as e:
+
         write_message("ERROR HAPPEN")
-        write_message("____________WORKFLOW PART____________")
-        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_workflow == e.id_workflow).all()
+        write_message("____________Workflow log output____________")
+
+        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == e.id_workflow).all()
 
         for log in workflowlog:
             write_message(log.message)
 
         write_message("ERROR HAPPEN")
-        write_message("____________OBJECT PART____________")
-        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_bibworkflowobject == e.id_object).all()
+        write_message("____________Object log output____________")
+        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_object == e.id_object).all()
         for log in objectlog:
             write_message(log.message)
         execution_time = round(time.time() - start_time, 2)
@@ -141,10 +152,10 @@ def task_run_core():
         write_message("Execution time :" + str(execution_time))
 
         raise e
-    # The workflow already waits for all its children to finish
+        # The workflow already waits for all its children to finish
     # We just need to check that they have not failed
 
-    workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_workflow == workflow.uuid).all()
+    workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == workflow.uuid).all()
 
     for log in workflowlog:
         write_message(log.message)
@@ -159,36 +170,6 @@ def task_run_core():
     # 1: "recoverable" error (don't stop queue)
     # 2: error (admin intervention needed)
     error_happened_p = 0
-
-    for irecords in range(0, 0):
-
-        post_process_functions = []
-
-        # Filter?
-        if 'f' in repository["postprocess"]:
-            post_process_functions.append(filter_step)
-
-        # Upload?
-        if 'u' in repository["postprocess"]:
-            post_process_functions.append(upload_step)
-
-        uploaded_task_ids = []
-
-        # Run the post-process functions
-        for fun in post_process_functions:
-            processed_string, error_code = fun(repository=repository, \
-                                               data=list_of_records[irecords], \
-                                               harvested_identifier_list=harvested_identifier_list, \
-                                               downloaded_material_dict=downloaded_material_dict, \
-                                               uploaded_task_ids=uploaded_task_ids)
-            if error_code:
-                error_happened_p = error_code
-                continue
-            # print stats:
-            write_message("Exctraction contains %i records." %
-                          (get_nb_records_in_string(processed_string)))
-
-    write_message("post-harvest processes ended")
 
     # Generate reports
     ticket_queue = task_get_option("create-ticket-in")
@@ -214,7 +195,7 @@ def task_run_core():
                        toaddr=notification_email,
                        subject=subject,
                        content=text)
-    # All records from all repositories harvested. Check for any errors.
+            # All records from all repositories harvested. Check for any errors.
 
     if error_happened_p:
         if CFG_OAI_FAILED_HARVESTING_STOP_QUEUE == 0 or not task_get_task_param("sleeptime") or error_happened_p > 1:
@@ -229,40 +210,18 @@ def task_run_core():
             write_message("An error occurred, but task is configured to continue")
             if CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN:
                 try:
-                    raise InvenioOAIHarvestWarning("OAIHarvest (task #%s) failed at fully harvesting source(s) %s. BibSched has NOT been stopped, and OAIHarvest will try to recover at next run" % (task_get_task_param("task_id"), ", ".join([repo[0][6] for repo in reposlist]),))
-                except InvenioOAIHarvestWarning, e:
+
+                    raise InvenioOAIHarvestWarning("OAIHarvest (task #%s) failed at fully harvesting source(s) %s."
+                                                   " BibSched has NOT been stopped, and OAIHarvest will try to rec"
+                                                   "over at next run" % (task_get_task_param("task_id"),
+                                                                         ", ".join([repo[0][6] for repo
+                                                                                    in reposlist]),))
+                except InvenioOAIHarvestWarning:
                     register_exception(stream='warning', alert_admin=True)
             return True
     else:
         return True
 
-
-
-
-def add_timestamp_and_timelag(timestamp,
-                              timelag):
-    """ Adds a time lag in seconds to a given date (timestamp).
-        Returns the resulting date. """
-    # remove any trailing .00 in timestamp:
-    timestamp = re.sub(r'\.[0-9]+$', '', timestamp)
-    # first convert timestamp to Unix epoch seconds:
-    timestamp_seconds = calendar.timegm(time.strptime(timestamp,
-        "%Y-%m-%d %H:%M:%S"))
-    # now add them:
-    result_seconds = timestamp_seconds + timelag
-    result = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(result_seconds))
-    return result
-
-def update_lastrun(index):
-    """ A method that updates the lastrun of a repository
-        successfully harvested """
-    try:
-        today = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-        sql = 'UPDATE oaiHARVEST SET lastrun=%s WHERE id=%s'
-        run_sql(sql, (today, index))
-        return 1
-    except StandardError, e:
-        return (0, e)
 
 
 def create_oaiharvest_log(task_id, oai_src_id, marcxmlfile):
@@ -275,164 +234,7 @@ def create_oaiharvest_log(task_id, oai_src_id, marcxmlfile):
     file_fd.close()
     create_oaiharvest_log_str(task_id, oai_src_id, xml_content)
 
-def create_oaiharvest_log_str(task_id, oai_src_id, xml_content):
-    """
-    Function which creates the harvesting logs
-    @param task_id bibupload task id
-    """
-    try:
-        records = create_records(xml_content)
-        for record in records:
-            oai_id = record_extract_oai_id(record[0])
-            query = "INSERT INTO oaiHARVESTLOG (id_oaiHARVEST, oai_id, date_harvested, bibupload_task_id) VALUES (%s, %s, NOW(), %s)"
-            run_sql(query, (str(oai_src_id), str(oai_id), str(task_id)))
-    except Exception, msg:
-        print "Logging exception : %s   " % (str(msg),)
 
-def call_bibupload(marcxmlfile, mode=None, oai_src_id= -1, sequence_id=None):
-    """
-    Creates a bibupload task for the task scheduler in given mode
-    on given file. Returns the generated task id and logs the event
-    in oaiHARVESTLOGS, also adding any given oai source identifier.
-
-    @param marcxmlfile: base-marcxmlfilename to upload
-    @param mode: mode to upload in
-    @param oai_src_id: id of current source config
-    @param sequence_id: sequence-number, if relevant
-
-    @return: task_id if successful, otherwise None.
-    """
-    if mode is None:
-        mode = ["-r", "-i"]
-    if os.path.exists(marcxmlfile):
-        try:
-            args = mode
-            # Add job with priority 6 (above normal bibedit tasks) and file to upload to arguments
-            #FIXME: allow per-harvest arguments
-            args.extend(["-P", "6", marcxmlfile])
-            if sequence_id:
-                args.extend(['-I', str(sequence_id)])
-            task_id = task_low_level_submission("bibupload", "oaiharvest", *tuple(args))
-            create_oaiharvest_log(task_id, oai_src_id, marcxmlfile)
-        except Exception, msg:
-            write_message("An exception during submitting oaiharvest task occured : %s " % (str(msg)))
-            return None
-        return task_id
-    else:
-        write_message("marcxmlfile %s does not exist" % (marcxmlfile,))
-        return None
-
-def call_bibfilter(bibfilterprogram, marcxmlfile):
-    """
-    Call bibfilter program BIBFILTERPROGRAM on MARCXMLFILE, which is usually
-    run before uploading records.
-
-    The bibfilter should produce up to four files called MARCXMLFILE.insert.xml,
-    MARCXMLFILE.correct.xml, MARCXMLFILE.append.xml and MARCXMLFILE.holdingpen.xml.
-    The first file contains parts of MARCXML to be uploaded in insert mode,
-    the second file is uploaded in correct mode, third in append mode and the last file
-    contains MARCXML to be uploaded into the holding pen.
-
-    @param bibfilterprogram: path to bibfilter script to run
-    @param marcxmlfile: base-marcxmlfilename
-
-    @return: exitcode and any error messages as: (exitcode, err_msg)
-    """
-    all_err_msg = []
-    exitcode = 0
-    if bibfilterprogram:
-        if not os.path.isfile(bibfilterprogram):
-            all_err_msg.append("bibfilterprogram %s is not a file" %
-                (bibfilterprogram,))
-            exitcode = 1
-        elif not os.path.isfile(marcxmlfile):
-            all_err_msg.append("marcxmlfile %s is not a file" % (marcxmlfile,))
-            exitcode = 1
-        else:
-            exitcode, dummy, cmd_stderr = run_shell_command(cmd="%s '%s'",
-                                                            args=(bibfilterprogram,
-                                                            marcxmlfile))
-            if exitcode != 0 or cmd_stderr != "":
-                all_err_msg.append("Error while running filtering script on %s\nError:%s" %
-                                   (marcxmlfile, cmd_stderr))
-    else:
-        try:
-            all_err_msg.append("no bibfilterprogram defined, copying %s only" %
-                (marcxmlfile,))
-            shutil.copy(marcxmlfile, marcxmlfile + ".insert.xml")
-        except:
-            all_err_msg.append("cannot copy %s into %s.insert.xml" % (marcxmlfile, marcxmlfile))
-        exitcode = 1
-    return exitcode, "\n".join(all_err_msg)
-
-def get_row_from_reposname(reposname):
-    """ Returns all information about a row (OAI source)
-        from the source name """
-    try:
-        sql = """SELECT id, baseurl, metadataprefix, arguments,
-                        comment, bibconvertcfgfile, name, lastrun,
-                        frequency, postprocess, setspecs,
-                        bibfilterprogram
-                   FROM oaiHARVEST WHERE name=%s"""
-        res = run_sql(sql, (reposname,))
-        reposdata = []
-        for element in res:
-            reposdata.append(element)
-        return reposdata
-    except StandardError, e:
-        return (0, e)
-
-def get_all_rows_from_db():
-    """ This method retrieves the full database of repositories and returns
-        a list containing (in exact order):
-        | id | baseurl | metadataprefix | arguments | comment
-        | bibconvertcfgfile | name   | lastrun | frequency
-        | postprocess | setspecs | bibfilterprogram
-    """
-    try:
-        reposlist = []
-        sql = """SELECT id FROM oaiHARVEST"""
-        idlist = run_sql(sql)
-        for index in idlist:
-            sql = """SELECT id, baseurl, metadataprefix, arguments,
-                            comment, bibconvertcfgfile, name, lastrun,
-                            frequency, postprocess, setspecs,
-                            bibfilterprogram
-                     FROM oaiHARVEST WHERE id=%s""" % index
-
-            reposelements = run_sql(sql)
-            repos = []
-            for element in reposelements:
-                repos.append(element)
-            reposlist.append(repos)
-        return reposlist
-    except StandardError, e:
-        return (0, e)
-
-def compare_timestamps_with_tolerance(timestamp1,
-                                      timestamp2,
-                                      tolerance=0):
-    """Compare two timestamps TIMESTAMP1 and TIMESTAMP2, of the form
-       '2005-03-31 17:37:26'. Optionally receives a TOLERANCE argument
-       (in seconds).  Return -1 if TIMESTAMP1 is less than TIMESTAMP2
-       minus TOLERANCE, 0 if they are equal within TOLERANCE limit,
-       and 1 if TIMESTAMP1 is greater than TIMESTAMP2 plus TOLERANCE.
-    """
-    # remove any trailing .00 in timestamps:
-    timestamp1 = re.sub(r'\.[0-9]+$', '', timestamp1)
-    timestamp2 = re.sub(r'\.[0-9]+$', '', timestamp2)
-    # first convert timestamps to Unix epoch seconds:
-    timestamp1_seconds = calendar.timegm(time.strptime(timestamp1,
-        "%Y-%m-%d %H:%M:%S"))
-    timestamp2_seconds = calendar.timegm(time.strptime(timestamp2,
-        "%Y-%m-%d %H:%M:%S"))
-    # now compare them:
-    if timestamp1_seconds < timestamp2_seconds - tolerance:
-        return -1
-    elif timestamp1_seconds > timestamp2_seconds + tolerance:
-        return 1
-    else:
-        return 0
 
 def get_dates(dates):
     """ A method to validate and process the dates input by the user
@@ -459,7 +261,7 @@ def get_dates(dates):
                                   "'yyyy-mm-dd:yyyy-mm-dd'")
                     twodates = None
                     return twodates
-            ## final check.. date1 must me smaller than date2
+                    ## final check.. date1 must me smaller than date2
             date1 = str(twodates[0]) + " 01:00:00"
             date2 = str(twodates[1]) + " 01:00:00"
             if compare_timestamps_with_tolerance(date1, date2) != -1:
@@ -524,7 +326,7 @@ def main():
                                     "key=",
                                     "user=",
                                     "password="]
-                                   )
+        )
         # So everything went smoothly: start harvesting in manual mode
         if len([opt for opt, opt_value in opts if opt in ['-v', '--verb']]) > 0:
             # verb parameter is given
@@ -539,7 +341,7 @@ def main():
 
             # get options and arguments
             for opt, opt_value in opts:
-                if   opt in ["-v", "--verb"]:
+                if opt in ["-v", "--verb"]:
                     http_param_dict['verb'] = opt_value
                 elif opt in ["-m", '--method']:
                     if opt_value == "GET" or opt_value == "POST":
@@ -576,12 +378,12 @@ def main():
                 base_url = args[-1]
                 if not base_url.lower().startswith('http'):
                     base_url = 'http://' + base_url
-                (addressing_scheme, network_location, path, dummy1, \
+                (addressing_scheme, network_location, path, dummy1,
                  dummy2, dummy3) = urlparse.urlparse(base_url)
                 secure = (addressing_scheme == "https")
 
                 if (cert_file and not key_file) or \
-                   (key_file and not cert_file):
+                        (key_file and not cert_file):
                     # Both are needed if one specified
                     usage(1, "You must specify both certificate and key files")
 
@@ -604,7 +406,7 @@ def main():
                                            key_file)
 
                 sys.stderr.write("Harvesting completed at: %s\n\n" %
-                    time.strftime("%Y-%m-%d %H:%M:%S --> ", time.localtime()))
+                                 time.strftime("%Y-%m-%d %H:%M:%S --> ", time.localtime()))
                 return
             else:
                 usage(1, "You must specify the URL to harvest")
@@ -612,8 +414,10 @@ def main():
             # verb is not given. We will continue with periodic
             # harvesting. But first check if URL parameter is given:
             # if it is, then warn directly now
-            if len(args) > 1 or \
-               (len(args) == 1 and not args[0].isdigit()):
+
+            if len([opt for opt, opt_value in opts if opt in ['-i', '--identifier']]) == 0 \
+                and len(args) > 1 or \
+                    (len(args) == 1 and not args[0].isdigit()):
                 usage(1, "You must specify the --verb parameter")
     except getopt.error, e:
         # So could it be that we are using different arguments? Try to
@@ -657,28 +461,34 @@ Automatic (periodical) harvesting mode:
    between 2005-05-05 and 2005-05-10:
      $ oaiharvest -r pubmed -d 2005-05-05:2005-05-10 -t 10m
 """,
-            help_specific_usage='Manual single-shot harvesting mode:\n'
-              '  -o, --output         specify output file\n'
-              '  -v, --verb           OAI verb to be executed\n'
-              '  -m, --method         http method (default POST)\n'
-              '  -p, --metadataPrefix metadata format\n'
-              '  -i, --identifier     OAI identifier\n'
-              '  -s, --set            OAI set(s). Whitespace-separated list\n'
-              '  -r, --resuptionToken Resume previous harvest\n'
-              '  -f, --from           from date (datestamp)\n'
-              '  -u, --until          until date (datestamp)\n'
-              '  -c, --certificate    path to public certificate (in case of certificate-based harvesting)\n'
-              '  -k, --key            path to private key (in case of certificate-based harvesting)\n'
-              '  -l, --user           username (in case of password-protected harvesting)\n'
-              '  -w, --password       password (in case of password-protected harvesting)\n'
-              'Automatic periodical harvesting mode:\n'
-              '  -r, --repository="repo A"[,"repo B"] \t which repositories to harvest (default=all)\n'
-              '  -d, --dates=yyyy-mm-dd:yyyy-mm-dd \t reharvest given dates only\n',
-            version=__revision__,
-            specific_params=("r:d:", ["repository=", "dates=", ]),
-            task_submit_elaborate_specific_parameter_fnc=
-                task_submit_elaborate_specific_parameter,
-            task_run_fnc=task_run_core)
+
+              help_specific_usage='Manual single-shot harvesting mode:\n'
+                                  '  -o, --output         specify output file\n'
+                                  '  -v, --verb           OAI verb to be executed\n'
+                                  '  -m, --method         http method (default POST)\n'
+                                  '  -p, --metadataPrefix metadata format\n'
+                                  '  -i, --identifier     OAI identifier\n'
+                                  '  -s, --set            OAI set(s). Whitespace-separated list\n'
+                                  '  -r, --resuptionToken Resume previous harvest\n'
+                                  '  -f, --from           from date (datestamp)\n'
+                                  '  -u, --until          until date (datestamp)\n'
+                                  '  -c, --certificate    path to public certificate (in case of certificate-based harvesting)\n'
+                                  '  -k, --key            path to private key (in case of certificate-based harvesting)\n'
+                                  '  -l, --user           username (in case of password-protected harvesting)\n'
+                                  '  -w, --password       password (in case of password-protected harvesting)\n'
+                                  'Deamon mode (periodical or one-shot harvesting mode):\n'
+                                  '  -r, --repository="repo A"[,"repo B"] \t which repositories to harvest (default=all)\n'
+                                  '  -d, --dates=yyyy-mm-dd:yyyy-mm-dd \t reharvest given dates only\n'
+                                  '  -i, --identifier     OAI identifier if wished to run in as a task.\n'
+                                  '  --notify-email-to    Receive notifications on given email on successful upload and/or finished harvest.\n'
+                                  '  --create-ticket-in   Provide desired ticketing queue to create a ticket in it on upload and/or finished harvest.\n'
+                                  '                       Requires a configured ticketing system (BibCatalog).\n',
+              version=__revision__,
+              specific_params=(
+                  "r:i:d:", ["repository=", "idenfifier=", "dates=", "notify-email-to=", "create-ticket-in="]),
+              task_submit_elaborate_specific_parameter_fnc=task_submit_elaborate_specific_parameter,
+              task_run_fnc=task_run_core)
+
 
 
 def task_submit_elaborate_specific_parameter(key, value, opts, args):
