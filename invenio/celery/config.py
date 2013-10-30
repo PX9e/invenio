@@ -31,23 +31,20 @@ def default_config(config):
     # defined in *_tasks.py files in 'invenio' package.
     config.setdefault("CELERY_INCLUDE", [
         #"invenio.celery.tasks",
-        #"invenio.bibworkflow_workers.worker_celery",
+        #"invenio.nvenio.bibworkflow_workers.worker_celery",
     ])
+
 
     ## Result backend
     ## --------------
     config.setdefault("CELERY_RESULT_BACKEND", "redis://localhost:6379/1")
-    config.setdefault("CELERY_RESULT_SERIALIZER", "msgpack")
-
-    ## Routing
-    ## -------
-    # ...
+    config.setdefault("CELERY_RESULT_SERIALIZER", "pickle")
 
     ## Task execution
     ## --------------
     config.setdefault("CELERY_ALWAYS_EAGER", False)
     config.setdefault("CELERY_IGNORE_RESULT", False)
-    config.setdefault("CELERY_TASK_SERIALIZER", "msgpack")
+    config.setdefault("CELERY_TASK_SERIALIZER", "pickle")
 
     ## Worker
     ## ------
@@ -56,6 +53,7 @@ def default_config(config):
     ## Error emails
     ## ------------
     config.setdefault("CELERY_SEND_TASK_ERROR_EMAILS", False)
+
 
     if "CFG_SITE_EMERGENCY_EMAIL_ADDRESSES" in config:
         try:
