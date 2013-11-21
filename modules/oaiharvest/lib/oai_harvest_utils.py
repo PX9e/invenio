@@ -32,9 +32,9 @@ import calendar
 from invenio.errorlib import register_exception
 from invenio import oai_harvest_getter
 
-from invenio.base.config import (CFG_ETCDIR, CFG_SITE_URL,
-                                 CFG_SITE_ADMIN_EMAIL
-                                 )
+from invenio.config import (CFG_ETCDIR, CFG_SITE_URL,
+                            CFG_SITE_ADMIN_EMAIL
+                            )
 from invenio.legacy.bibrecord import (record_get_field_instances,
                                       record_modify_subfield,
                                       field_xml_output
@@ -42,8 +42,8 @@ from invenio.legacy.bibrecord import (record_get_field_instances,
 from invenio.shellutils import run_shell_command
 from invenio.utils.text import translate_latex2unicode
 from invenio.oai_harvest_dblayer import update_lastrun
-from invenio.bibcatalog import bibcatalog_system
-from invenio.bibtask import write_message
+from invenio.legacy.bibcatalog.api import bibcatalog_system
+from invenio.legacy.bibsched.bibtask import write_message
 
 ## precompile some often-used regexp for speed reasons:
 REGEXP_OAI_ID = re.compile("<identifier.*?>(.*?)<\/identifier>", re.DOTALL)

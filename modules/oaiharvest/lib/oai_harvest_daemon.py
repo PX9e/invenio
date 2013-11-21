@@ -36,10 +36,11 @@ import shutil
 import urlparse
 
 
-from invenio.base.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
-                                 CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN,
-                                 CFG_SITE_SUPPORT_EMAIL
-                                 )
+from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
+                            CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN,
+                            CFG_SITE_SUPPORT_EMAIL
+                            )
+
 
 from invenio.oai_harvest_config import InvenioOAIHarvestWarning
 
@@ -76,12 +77,12 @@ from invenio.legacy.bibedit.utils import record_find_matching_fields
 from invenio.legacy.bibcatalog.api import bibcatalog_system
 from invenio.ext.legacy.handler_flask import with_app_context
 
-from invenio.bibtask import (task_get_task_param,
-                             task_get_option,
-                             task_set_option,
-                             write_message,
-                             task_init
-                             )
+from invenio.legacy.bibsched.bibtask import (task_get_task_param,
+                                             task_get_option,
+                                             task_set_option,
+                                             write_message,
+                                             task_init
+                                             )
 
 
 from invenio import oai_harvest_getter
@@ -97,7 +98,7 @@ from invenio.ext.email import send_email
 
 from invenio.modules.workflows.models import (BibWorkflowEngineLog,
                                               BibWorkflowObjectLog)
-from invenio.bibworkflow_api import start
+from invenio.modules.workflows.api import start
 from invenio.bibworkflow_utils import InvenioWorkflowError
 
 import invenio.template
