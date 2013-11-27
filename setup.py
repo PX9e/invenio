@@ -100,6 +100,7 @@ setup(
     entry_points={
         'console_scripts': [
             'inveniomanage = invenio.base.manage:main',
+            'oaiharvest = invenio.modules.oaiharvest.scripts.oaiharvest:main',
             ## Legacy
             'inveniocfg = invenio.legacy.inveniocfg:main',
             'textmarc2xmlmarc = invenio.legacy.bibrecord.scripts.textmarc2xmlmarc:main',

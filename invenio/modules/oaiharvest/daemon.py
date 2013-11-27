@@ -93,6 +93,17 @@ from invenio.ext.logging import register_exception
 from invenio.oai_harvest_utils import (compare_timestamps_with_tolerance,
                                        generate_harvest_report)
 
+from invenio.base.factory import with_app_context
+from invenio.oai_harvest_dblayer import get_oai_src_by_name, get_all_oai_src, update_lastrun, create_oaiharvest_log_str
+
+from invenio.oai_harvest_utils import get_nb_records_in_file, \
+                                      collect_identifiers, \
+                                      remove_duplicates, \
+                                      add_timestamp_and_timelag, \
+                                      find_matching_files, \
+                                      translate_fieldvalues_from_latex, \
+                                      compare_timestamps_with_tolerance, \
+                                      generate_harvest_report
 
 from invenio.webuser import email_valid_p
 from invenio.ext.email import send_email
@@ -304,7 +315,6 @@ def usage(exitcode=0, msg=""):
         sys.stderr.write(msg + "\n")
     sys.exit(exitcode)
 
-
 @with_app_context()
 def main():
     """Starts the tool.
@@ -512,7 +522,6 @@ def task_submit_elaborate_specific_parameter(key, value, opts, args):
     else:
         return False
     return True
-
 
 ### okay, here we go:
 if __name__ == '__main__':
