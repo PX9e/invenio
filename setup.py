@@ -100,7 +100,6 @@ setup(
     entry_points={
         'console_scripts': [
             'inveniomanage = invenio.base.manage:main',
-            'oaiharvest = invenio.modules.oaiharvest.scripts.oaiharvest:main',
             ## Legacy
             'inveniocfg = invenio.legacy.inveniocfg:main',
             'textmarc2xmlmarc = invenio.legacy.bibrecord.scripts.textmarc2xmlmarc:main',
@@ -120,6 +119,7 @@ setup(
             'bibreformat = invenio.legacy.bibformat.scripts.bibreformat:main',
             'oairepositoryupdater = invenio.legacy.oairepository.scripts.oairepositoryupdater:main',
             'gotoadmin = invenio.modules.redirector.scripts.redirector:main',
+            'oaiharvest = invenio.legacy.oaiharvest.scripts.oaiharvest:main',
         ],
     },
     install_requires=install_requires,
