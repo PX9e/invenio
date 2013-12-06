@@ -77,6 +77,7 @@ class generic_harvesting_workflow_with_bibsched(object):
                 end_for,
                 write_something_bibsched("the end"),
                 write_something_generic("Finishing", task_update_progress),
+
                 workflows_reviews
     ]
 
