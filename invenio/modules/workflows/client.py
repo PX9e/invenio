@@ -66,9 +66,14 @@ def run_workflow(wfe, data, stop_on_halt=False, stop_on_error=False,
             wfe.setPosition(wfe.getCurrObjId() + 1, [0, 0])
 
             if stop_on_halt or stop_on_error:
+<<<<<<< HEAD
                 raise WorkflowError(message=msg,
                                     id_workflow=wfe.uuid,
                                     id_object=wfe.getCurrObjId())
+=======
+                e = InvenioWorkflowError(str(e), wfe.uuid, wfe.getCurrObjId())
+                raise e
+>>>>>>> top stuff 2
 
 
 def continue_execution(wfe, data, restart_point="restart_task",

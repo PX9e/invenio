@@ -22,6 +22,7 @@ import glob
 import re
 import traceback
 
+
 from invenio.legacy.bibupload.engine import (find_record_from_recid,
                                              find_record_from_sysno,
                                              find_records_from_extoaiid,
@@ -323,6 +324,7 @@ def fulltext_download(obj, eng):
                             "    </datafield>"
                             ) % {'url': obj.extra_data["options"]["identifiers"]["pdf"],
                                  'doctype': doctype}
+
 
             updated_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<collection>\n<record>\n' + fulltext_xml + \
                           '</record>\n</collection>'

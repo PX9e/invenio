@@ -7,6 +7,8 @@ from invenio.modules.workflows.errors import WorkflowError
 
 from time import sleep
 
+from time import sleep
+
 
 def get_nb_workflow_created(obj, eng):
     eng.log.info("last task name: get_nb_workflow_created")
@@ -82,7 +84,6 @@ def wait_for_workflows_to_complete(obj, eng):
                 workflowlog = BibWorkflowEngineLog.query.filter(
                     BibWorkflowEngineLog.id_object == e.id_workflow
                 ).all()
-
                 for log in workflowlog:
                     eng.log.error(log.message)
 
@@ -121,7 +122,6 @@ def wait_for_a_workflow_to_complete_obj(obj, eng):
 
         for log in workflowlog:
             eng.log.error(log.message)
-
         eng.extra_data["nb_workflow_failed"] += 1
         eng.extra_data["nb_workflow_finish"] += 1
     except Exception as e:
@@ -159,7 +159,6 @@ def wait_for_a_workflow_to_complete(obj, eng):
             workflowlog = BibWorkflowEngineLog.query.filter(
                 BibWorkflowEngineLog.id_object == e.id_workflow
             ).all()
-
             for log in workflowlog:
                 eng.log.error(log.message)
 
