@@ -225,6 +225,7 @@ def harvest_records(obj, eng):
         msg = "Harvested files miss identifiers for %s" % (arguments,)
         eng.log.info(msg)
         raise WorkflowError(msg, id_workflow=eng.uuid)
+    obj.extra_data['harvested_files_list'] = harvested_files_list
     eng.log.info("%d files harvested and processed" % (len(harvested_files_list),))
     eng.log.info("End harvest records task")
 

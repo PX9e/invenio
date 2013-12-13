@@ -7,8 +7,6 @@ from invenio.modules.workflows.errors import WorkflowError
 
 from time import sleep
 
-from time import sleep
-
 
 def get_nb_workflow_created(obj, eng):
     eng.log.info("last task name: get_nb_workflow_created")

@@ -20,7 +20,6 @@
 from ..tasks.marcxml_tasks import (get_repositories_list,
                                    init_harvesting,
                                    harvest_records,
-                                   get_files_list,
                                    get_extra_data,
                                    get_records_from_file
                                    )
@@ -43,11 +42,8 @@ from ..tasks.bibsched_tasks import write_something_generic
 from invenio.legacy.bibsched.bibtask import task_update_progress, write_message
 
 
-from invenio.base.config import CFG_TMPSHAREDDIR
-
-
 class generic_harvesting_workflow_with_bibsched(object):
-    repository = None
+    repository = 'arXiv'
     workflow = [write_something_generic("Initialisation",[task_update_progress, write_message]),
                 init_harvesting,
                 write_something_generic("Starting", [task_update_progress, write_message]),
@@ -58,7 +54,7 @@ class generic_harvesting_workflow_with_bibsched(object):
                     [
                         foreach(get_records_from_file()),
                         [
-                            start_workflow("full_doc_process", None, stop_on_error=True),
+                            start_workflow("full_doc_process", None),
                             write_something_generic(["Workflow started : ", get_nb_workflow_created, " "],
                                                     [task_update_progress, write_message]),
                         ],
