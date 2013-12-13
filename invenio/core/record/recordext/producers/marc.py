@@ -36,7 +36,7 @@ def produce(self, fields=None):
         if field.startswith('__'):
             continue
         try:
-            marc_rules = get_producer_rules(field, 'xm')
+            marc_rules = get_producer_rules(field, 'json_for_marc')
             for rule in marc_rules:
                 field = self.get(rule[0], None)
                 if field is None:
