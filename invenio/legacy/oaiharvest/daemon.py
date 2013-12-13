@@ -37,7 +37,6 @@ from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
                             CFG_SITE_SUPPORT_EMAIL
                             )
 
-
 from invenio.legacy.oaiharvest.config import InvenioOAIHarvestWarning
 
 from invenio.legacy.bibsched.bibtask import (task_get_task_param,
@@ -243,6 +242,24 @@ def get_repository_names(repositories):
     return repository_names
 
 
+def get_identifier_names(identifier):
+    if identifier:
+        # Let's see if the user had a comma-separated list of OAI ids.
+        stripped_idents = []
+        for ident in identifier.split(","):
+            if not ident.startswith("oai:arXiv.org"):
+                if "oai:arxiv.org" in ident.lower():
+                    ident = ident.replace("oai:arxiv.org", "oai:arXiv.org")
+                elif "arXiv" in ident:
+                    # New style arXiv ID
+                    ident = ident.replace("arXiv", "oai:arXiv.org")
+                elif "/" in ident:
+                    # Old style arXiv ID?
+                    ident = "%s%s" % ("oai:arXiv.org:", ident)
+            stripped_idents.append(ident.strip())
+        return stripped_idents
+
+
 def usage(exitcode=0, msg=""):
     """Print out info. Only used when run in 'manual' harvesting mode"""
     sys.stderr.write("*Manual single-shot harvesting mode*\n")
@@ -261,7 +278,8 @@ def main():
     """
     # Let's try to parse the arguments as used in manual harvesting:
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "o:v:m:p:i:s:f:u:r:c:k:w:l:",
+
+        opts, args = getopt.getopt(sys.argv[1:], "o:v:m:p:i:s:f:u:r:c:k:l:w:",
                                    ["output=",
                                     "verb=",
                                     "method=",
@@ -277,6 +295,8 @@ def main():
                                     "password=",
                                     "workflow="]
         )
+
+
         # So everything went smoothly: start harvesting in manual mode
         if len([opt for opt, opt_value in opts if opt in ['-v', '--verb']]) > 0:
             # verb parameter is given
@@ -373,12 +393,23 @@ def main():
         # start the BibSched task (automated harvesting) and see if it
         # validates
         pass
-    # BibSched mode - periodical harvesting
+        # BibSched mode - periodical harvesting
     # Note that the 'help' is common to both manual and automated
     # mode.
+
+
+    num_of_critical_parameter = 0
+
+    for opt in sys.argv[1:]:
+        if opt in ("-r", "--repository") or opt in "--workflow":
+            num_of_critical_parameter += 1
+        if num_of_critical_parameter > 1:
+            usage(1, "You can't specify twice -r or --workflow or -r and --workflow !")
+
     task_set_option("repository", None)
     task_set_option("dates", None)
     task_set_option("workflow", None)
+    task_set_option("identifiers", None)
     task_init(authorization_action='runoaiharvest',
               authorization_msg="oaiharvest Task Submission",
               description="""
@@ -435,7 +466,8 @@ Automatic (periodical) harvesting mode:
                                   '                       Requires a configured ticketing system (BibCatalog).\n',
               version=__revision__,
               specific_params=(
-                  "r:i:d:W", ["repository=", "idenfifier=", "dates=", "workflow=", "notify-email-to=", "create-ticket-in="]),
+                  "r:i:d:W",
+                  ["repository=", "identifier=", "dates=", "workflow=", "notify-email-to=", "create-ticket-in="]),
               task_submit_elaborate_specific_parameter_fnc=task_submit_elaborate_specific_parameter,
               task_run_fnc=task_run_core)
 
@@ -446,6 +478,8 @@ def task_submit_elaborate_specific_parameter(key, value, opts, args):
         task_set_option('repository', get_repository_names(value))
     elif key in ("--workflow"):
         task_set_option('workflow', value)
+    elif key in ("-i", "--identifier"):
+        task_set_option('identifiers', get_identifier_names(value))
     elif key in ("-d", "--dates"):
         task_set_option('dates', get_dates(value))
         if value is not None and task_get_option("dates") is None:

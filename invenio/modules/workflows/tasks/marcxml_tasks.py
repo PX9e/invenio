@@ -84,6 +84,7 @@ def add_metadata_to_extra_data(obj, eng):
     Creates bibrecord from object data and
     populates extra_data with metadata
     """
+    obj.extra_data["last_task_name"] = "add_metadata_to_extra_data"
     from invenio.legacy.bibrecord import create_record, record_get_field_value
 
     record = create_record(obj.data)
@@ -106,7 +107,6 @@ def approve_record(obj, eng):
     """
 
     obj.extra_data["last_task_name"] = 'Record Approval'
-    eng.log.info("last task name: approve_record")
     try:
         obj.extra_data['message'] = 'Record needs approval. Click on widget to resolve.'
         eng.log.info("Adding the approval widget to %s" % obj.id)
@@ -128,8 +128,9 @@ def convert_record_to_bibfield(obj, eng):
     """
     from invenio.legacy.bibfield import create_record
 
-    eng.log.info("last task name: convert_record_to_bibfield")
+    obj.extra_data["last_task_name"]  = "last task name: convert_record_to_bibfield"
     obj.data = create_record(obj.data).rec_json
+    obj.extra_data
     eng.log.info("Conversion succeed")
 
 
@@ -138,7 +139,7 @@ def init_harvesting(obj, eng):
     This function gets all the option linked to the task and stores them into the
     object to be used later.
     """
-    eng.log.info("last task name: init_harvesting")
+    obj.extra_data["last_task_name"] = "last task name: init_harvesting"
     try:
         obj.extra_data["options"] = eng.extra_data["options"]
     except KeyError:
@@ -157,7 +158,7 @@ def get_repositories_list(repositories):
     def _get_repositories_list(obj, eng):
 
 
-        eng.log.info("last task name: _get_repositories_list")
+        obj.extra_data["last_task_name"] = "last task name: _get_repositories_list"
 
         reposlist_temp = None
 
@@ -179,7 +180,6 @@ def harvest_records(obj, eng):
     queue row, containing if, arguments, etc.
     Return 1 in case of success and 0 in case of failure.
     """
-    eng.log.info("last task name: harvest_records")
     obj.extra_data["last_task_name"] = 'harvest_records'
     harvested_identifier_list = []
 
@@ -189,11 +189,11 @@ def harvest_records(obj, eng):
     # ## go ahead: check if user requested from-until harvesting
     try:
         if "dates" not in obj.extra_data["options"]:
-            obj.extra_data["options"]["dates"] = {}
+            obj.extra_data["options"]["dates"] = []
         if "identifiers" not in obj.extra_data["options"]:
-            obj.extra_data["options"]["identifiers"] = {}
+            obj.extra_data["options"]["identifiers"] = []
     except TypeError:
-        obj.extra_data["options"] = {"dates": {}, "identifiers": {}}
+        obj.extra_data["options"] = {"dates": [], "identifiers": []}
 
     task_sleep_now_if_required()
 
@@ -233,12 +233,9 @@ harvest_records.__id__ = "h"
 
 def get_records_from_file(path=None):
     def _get_records_from_file(obj, eng):
-
-        eng.log.info("last task name: _get_records_from_file")
-
+        obj.extra_data["last_task_name"] = "last task name: _get_records_from_file"
         if not "LoopData" in eng.extra_data:
             eng.extra_data["LoopData"] = {}
-
         if "get_records_from_file" not in eng.extra_data["LoopData"]:
             if path:
                 eng.extra_data["LoopData"].update({"get_records_from_file": record_extraction_from_file(path)})
@@ -260,7 +257,7 @@ def get_eng_uuid_harvested(obj, eng):
 
 def get_files_list(path, parameter):
     def _get_files_list(obj, eng):
-        eng.log.info("last task name: get_files_list")
+        obj.extra_data["last_task_name"] = "last task name: get_files_list"
         if callable(parameter):
             unknown = parameter(obj, eng)
         else:
@@ -272,16 +269,21 @@ def get_files_list(path, parameter):
 
     return _get_files_list
 
+def get_extra_data(name):
+    def _get_files_list(obj, eng):
+        return obj.extra_data[name]
+    return _get_files_list
+
 
 def convert_record(stylesheet="oaidc2marcxml.xsl"):
     def _convert_record(obj, eng):
         """
         Will convert the object data, if XML, using the given stylesheet
         """
-        eng.log.info("last task name: convert_record")
+        obj.extra_data["last_task_name"] = 'Convert Record'
         from invenio.legacy.bibconvert.xslt_engine import convert
 
-        obj.extra_data["last_task_name"] = 'Convert Record'
+
         eng.log.info("Starting conversion using %s stylesheet" %
                      (stylesheet,))
 
@@ -298,15 +300,34 @@ def convert_record(stylesheet="oaidc2marcxml.xsl"):
     return _convert_record
 
 
+def convert_record_with_repository(stylesheet="oaidc2marcxml.xsl"):
+    def _convert_record(obj, eng):
+        """
+        Will convert the object data, if XML, using the stylesheet
+        in the OAIrepository stored in the object extra_data.
+        """
+
+        if not obj.extra_data["repository"].arguments.get('c_stylesheet', ""):
+            stylesheet_to_use = stylesheet
+        else:
+            stylesheet_to_use = obj.extra_data["repository"].arguments.get('c_stylesheet', "")
+        convert_record(stylesheet_to_use)(obj, eng)
+
+    return _convert_record
+
+
 def fulltext_download(obj, eng):
     """
     Performs the fulltext download step.
     Only for arXiv
     """
-    eng.log.info("full-text attachment step started")
+
+
+    obj.extra_data["last_task_name"] = "full-text attachment step started"
     task_sleep_now_if_required()
 
-    if "pdf" not in obj.extra_data["options"]["identifiers"]:
+    if "pdf" not in obj.extra_data["options"]:
+
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_control_number"]["value"],
                                       extract_path, ["pdf"])
@@ -317,15 +338,14 @@ def fulltext_download(obj, eng):
         else:
             doctype = 'arXiv'
         if pdf:
-            obj.extra_data["options"]["identifiers"]["pdf"] = pdf
+            obj.extra_data["options"]["pdf"] = pdf
             fulltext_xml = ("  <datafield tag=\"FFT\" ind1=\" \" ind2=\" \">\n"
                             "    <subfield code=\"a\">%(url)s</subfield>\n"
                             "    <subfield code=\"t\">%(doctype)s</subfield>\n"
                             "    </datafield>"
-                            ) % {'url': obj.extra_data["options"]["identifiers"]["pdf"],
-                                 'doctype': doctype}
 
-
+                           ) % {'url': obj.extra_data["options"]["pdf"],
+                                'doctype': doctype}
             updated_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<collection>\n<record>\n' + fulltext_xml + \
                           '</record>\n</collection>'
             from invenio.legacy.bibfield import create_record
@@ -344,7 +364,6 @@ def quick_match_record(obj, eng):
 
     001 fields even in the insert mode
     """
-    eng.log.info("last task name: quick_match_record")
     obj.extra_data["last_task_name"] = 'Quick Match Record'
 
     function_dictionnary = {'recid': find_record_from_recid, 'system_number': find_record_from_sysno,
@@ -372,10 +391,9 @@ def quick_match_record(obj, eng):
 
 def upload_record(mode="ir"):
     def _upload_record(obj, eng):
-        eng.log.info("last task name: upload_record")
-        from invenio.legacy.bibsched.bibtask import task_low_level_submission
-
         obj.extra_data["last_task_name"] = 'Upload Record'
+
+        from invenio.legacy.bibsched.bibtask import task_low_level_submission
 
         eng.log_info("Saving data to temporary file for upload")
         filename = obj.save_to_file()
@@ -398,16 +416,15 @@ def plot_extract(plotextractor_types):
         Performs the plotextraction step.
         """
 
-        eng.log.info("last task name: plot_extract")
-        obj.extra_data["last_task_name"] = 'plotextraction'
-        eng.log.info("plotextraction step started")
+
+        obj.extra_data["last_task_name"] = 'plot_extract'
         # Download tarball for each harvested/converted record, then run plotextrator.
         # Update converted xml files with generated xml or add it for upload
         task_sleep_now_if_required()
 
         if 'latex' in plotextractor_types:
             # Run LaTeX plotextractor
-            if "tarball" not in obj.extra_data["options"]["identifiers"]:
+            if "tarball" not in obj.extra_data["options"]:
                 # turn oaiharvest_23_1_20110214161632_converted -> oaiharvest_23_1_material
                 # to let harvested material in same folder structure
                 extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
@@ -416,12 +433,14 @@ def plot_extract(plotextractor_types):
                 time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
 
                 if tarball is None:
-                    raise WorkflowError("Error harvesting tarball from id: %s %s" %
-                                        (obj.data["system_control_number"]["value"], extract_path),
-                                        id_workflow=eng.uuid)
-                obj.extra_data["options"]["identifiers"]["tarball"] = tarball
+                    raise WorkflowError(str("Error harvesting tarball from id: %s %s" %
+                                                   (obj.data["system_control_number"]["value"], extract_path)),
+                                               eng.uuid)
+
+
+                obj.extra_data["options"]["tarball"] = tarball
             else:
-                tarball = obj.extra_data["options"]["identifiers"]["tarball"]
+                tarball = obj.extra_data["options"]["tarball"]
 
             sub_dir, refno = get_defaults(tarball, CFG_TMPDIR, "")
 
@@ -476,27 +495,27 @@ def refextract(obj, eng):
     """
     Performs the reference extraction step.
     """
-    eng.log.info("refextraction step started")
+    obj.extra_data["last_task_name"] = "refextraction step started"
 
     task_sleep_now_if_required()
 
-    if "pdf" not in obj.extra_data["options"]["identifiers"]:
+    if "pdf" not in obj.extra_data["options"]:
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_control_number"]["value"], extract_path, ["pdf"])
         time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         if pdf is not None:
-            obj.extra_data["options"]["identifiers"]["pdf"] = pdf
+            obj.extra_data["options"]["pdf"] = pdf
 
-    elif not os.path.isfile(obj.extra_data["options"]["identifiers"]["pdf"]):
+    elif not os.path.isfile(obj.extra_data["options"]["pdf"]):
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_control_number"]["value"], extract_path, ["pdf"])
         time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         if pdf is not None:
-            obj.extra_data["options"]["identifiers"]["pdf"] = pdf
+            obj.extra_data["options"]["pdf"] = pdf
 
-    if os.path.isfile(obj.extra_data["options"]["identifiers"]["pdf"]):
+    if os.path.isfile(obj.extra_data["options"]["pdf"]):
 
-        cmd_stdout = extract_references_from_file_xml(obj.extra_data["options"]["identifiers"]["pdf"])
+        cmd_stdout = extract_references_from_file_xml(obj.extra_data["options"]["pdf"])
         references_xml = REGEXP_REFS.search(cmd_stdout)
 
         if references_xml:
@@ -519,29 +538,27 @@ def author_list(obj, eng):
     """
     Performs the special authorlist extraction step (Mostly INSPIRE/CERN related).
     """
-    eng.log.info("last task name: author_list")
-    eng.log.info("authorlist extraction step started")
+    obj.extra_data["last_task_name"] = "last task name: author_list"
 
     identifiers = obj.data["system_control_number"]["value"]
     task_sleep_now_if_required()
 
-    if "tarball" not in obj.extra_data["options"]["identifiers"]:
+    if "tarball" not in obj.extra_data["options"]:
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_control_number"]["value"], extract_path, ["tarball"])
         tarball = str(tarball)
         time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         if tarball is None:
-            raise WorkflowError("Error harvesting tarball from id: %s %s" %
-                                (identifiers, extract_path),
-                                id_workflow=eng.uuid)
-        obj.extra_data["options"]["identifiers"]["tarball"] = tarball
+            raise WorkflowError(str("Error harvesting tarball from id: %s %s" % (identifiers, extract_path)),
+                                       eng.uuid)
+        obj.extra_data["options"]["tarball"] = tarball
 
-    sub_dir, dummy = get_defaults(obj.extra_data["options"]["identifiers"]["tarball"], CFG_TMPDIR, "")
+    sub_dir, dummy = get_defaults(obj.extra_data["options"]["tarball"], CFG_TMPDIR, "")
 
     try:
-        untar(obj.extra_data["options"]["identifiers"]["tarball"], sub_dir)
+        untar(obj.extra_data["options"]["tarball"], sub_dir)
     except Timeout:
-        eng.log.error('Timeout during tarball extraction on %s' % (obj.extra_data["options"]["identifiers"]["tarball"]))
+        eng.log.error('Timeout during tarball extraction on %s' % (obj.extra_data["options"]["tarball"]))
 
     xml_files_list = find_matching_files(sub_dir, ["xml"])
 
@@ -600,7 +617,7 @@ def upload_step(obj, eng):
     """
     Perform the upload step.
     """
-    eng.log.info("upload step started")
+    obj.extra_data["last_task_name"] = "upload step started"
     uploaded_task_ids = []
     #Work comment:
     #
@@ -610,11 +627,10 @@ def upload_step(obj, eng):
     new_dict_representation = JsonReader()
     new_dict_representation.rec_json = obj.data
     marcxml_value = new_dict_representation.legacy_export_as_marc()
-
     task_id = None
     # Get a random sequence ID that will allow for the tasks to be
     # run in order, regardless if parallel task execution is activated
-    sequence_id = random.randrange(1, 4294967296)
+    sequence_id = random.randrange(1, 60000)
     task_sleep_now_if_required()
     extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
     # Now we launch BibUpload tasks for the final MARCXML files
@@ -637,7 +653,7 @@ def upload_step(obj, eng):
                 args.extend(['-P', str(arguments.get('u_priority', 5))])
             args.append(filepath)
             task_id = task_low_level_submission("bibupload", "oaiharvest", *tuple(args))
-            create_oaiharvest_log(task_id, obj.extra_data["repository"].id, filepath)
+            create_oaiharvest_log_str(task_id, obj.extra_data["repository"].id, marcxml_value)
         except Exception, msg:
             eng.log.error("An exception during submitting oaiharvest task occured : %s " % (str(msg)))
             return None

@@ -365,43 +365,28 @@ def record_extraction_from_file(path):
 
     #will contains the header of the file ie: all lines before the first record
     header = ""
-
-    file = open(path,'r+')
-
-    #Exctraction of the header
-    temporary_string = file.readline()
-    while not temporary_string.startswith("<record>"):
-        header += temporary_string
-        temporary_string = file.readline()
-
-    #Exctraction of the records
-
-    temporary_record = temporary_string
-    temporary_string = file.readline()
-
-    while not temporary_string.startswith("</ListRecords>"):
-        if temporary_string.startswith("<record>"):
-            list_of_records.append(temporary_record)
-            temporary_record = temporary_string
-        else:
-            temporary_record = temporary_record + temporary_string
-        temporary_string = file.readline()
-
-    list_of_records.append(temporary_record)
-
-    #will contains the footer of the file ie: all lines after the last record
-
-    #Exctraction of the footer
-
-    footer = temporary_string
-
-    temporary_string = file.readline()
-
-    while not temporary_string == "":
-        footer = footer + temporary_string
-        temporary_string = file.readline()
-
-    file.close()
+    step = 0
+    for line in open(path, 'r+'):
+    #Extraction of the header
+        if step == 0:
+            if not line.startswith("<record>"):
+                header += line
+            else:
+                step = 1
+                temporary_record = line
+        elif step == 1:
+            if line.startswith("</ListRecords>") or line.startswith("</GetRecord>"):
+                step = 2
+                footer = line
+            elif line.startswith("<record>"):
+                temporary_record = line
+            elif line.startswith("</record>"):
+                 temporary_record += line
+                 list_of_records.append(temporary_record)
+            else:
+                temporary_record += line
+        elif step == 2:
+            footer += line
 
     #Reassembling of the records and the footer and header
 
