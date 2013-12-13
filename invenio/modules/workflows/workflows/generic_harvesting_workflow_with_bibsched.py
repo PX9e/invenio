@@ -49,9 +49,12 @@ class generic_harvesting_workflow_with_bibsched(object):
                 write_something_generic("Starting", [task_update_progress, write_message]),
                 foreach(get_repositories_list([repository]), "repository"),
                 [
+                    write_something_generic("Harvesting", [task_update_progress, write_message]),
                     harvest_records,
+                    write_something_generic("Reading Files", [task_update_progress, write_message]),
                     foreach(get_extra_data("harvested_files_list")),
                     [
+                        write_something_generic("Creating Workflows", [task_update_progress, write_message]),
                         foreach(get_records_from_file()),
                         [
                             start_workflow("full_doc_process", None),

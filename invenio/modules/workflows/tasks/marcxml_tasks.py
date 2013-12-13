@@ -168,8 +168,16 @@ def get_repositories_list(repositories):
         else:
 
             reposlist_temp = OaiHARVEST.get(OaiHARVEST.name != "").all()
+        true_repo_list = []
+        for repo in reposlist_temp:
+            true_repo_list.append(repo.to_dict())
 
-        return reposlist_temp
+
+        if true_repo_list:
+            return true_repo_list
+        else:
+            eng.halt()
+
 
     return _get_repositories_list
 
@@ -197,7 +205,9 @@ def harvest_records(obj, eng):
 
     task_sleep_now_if_required()
 
-    arguments = obj.extra_data["repository"].get_arguments()
+    arguments = obj.extra_data["repository"]["arguments"]
+    #from invenio.legacy.bibsched.bibtask import write_message
+    #write_message(arguments)
     if arguments:
         eng.log.info("running with post-processes: %r" % (arguments,))
 
@@ -214,7 +224,7 @@ def harvest_records(obj, eng):
                             id_workflow=eng.uuid)
 
     if len(harvested_files_list) == 0:
-        eng.log.error("No records harvested for %s" % (obj.data.name,))
+        eng.log.error("No records harvested for %s" % (obj.data["name"],))
         return None
         # Retrieve all OAI IDs and set active list
 
@@ -308,10 +318,10 @@ def convert_record_with_repository(stylesheet="oaidc2marcxml.xsl"):
         in the OAIrepository stored in the object extra_data.
         """
 
-        if not obj.extra_data["repository"].arguments.get('c_stylesheet', ""):
+        if not obj.extra_data["repository"]["arguments"]['c_stylesheet']:
             stylesheet_to_use = stylesheet
         else:
-            stylesheet_to_use = obj.extra_data["repository"].arguments.get('c_stylesheet', "")
+            stylesheet_to_use = obj.extra_data["repository"]["arguments"]['c_stylesheet']
         convert_record(stylesheet_to_use)(obj, eng)
 
     return _convert_record
@@ -333,7 +343,7 @@ def fulltext_download(obj, eng):
         tarball, pdf = harvest_single(obj.data["system_control_number"]["value"],
                                       extract_path, ["pdf"])
         time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
-        arguments = obj.extra_data["repository"].get_arguments()
+        arguments = obj.extra_data["repository"]["arguments"]
         if not arguments['t_doctype'] == '':
             doctype = arguments['t_doctype']
         else:
@@ -641,7 +651,7 @@ def upload_step(obj, eng):
     file_fd.close()
     mode = ["-r", "-i"]
 
-    arguments = obj.extra_data["repository"].get_arguments()
+    arguments = obj.extra_data["repository"]["arguments"]
 
     if os.path.exists(filepath):
         try:
@@ -654,7 +664,7 @@ def upload_step(obj, eng):
                 args.extend(['-P', str(arguments.get('u_priority', 5))])
             args.append(filepath)
             task_id = task_low_level_submission("bibupload", "oaiharvest", *tuple(args))
-            create_oaiharvest_log_str(task_id, obj.extra_data["repository"].id, marcxml_value)
+            create_oaiharvest_log_str(task_id, obj.extra_data["repository"]["id"], marcxml_value)
         except Exception, msg:
             eng.log.error("An exception during submitting oaiharvest task occured : %s " % (str(msg)))
             return None
@@ -662,11 +672,11 @@ def upload_step(obj, eng):
         eng.log.error("marcxmlfile %s does not exist" % (filepath,))
     if task_id is None:
         eng.log.error("an error occurred while uploading %s from %s" %
-                      (filepath, obj.extra_data["repository"].name))
+                      (filepath, obj.extra_data["repository"]["name"]))
     else:
         uploaded_task_ids.append(task_id)
         eng.log.info("material harvested from source %s was successfully uploaded" %
-                     (obj.extra_data["repository"].name,))
+                     (obj.extra_data["repository"]["name"],))
 
     if CFG_INSPIRE_SITE:
         # Launch BibIndex,Webcoll update task to show uploaded content quickly

@@ -423,33 +423,33 @@ def harvest_step(repository, harvestpath, identifiers, dates):
                                                 harvestpath,
                                                 str(dates[0]),
                                                 str(dates[1]))
-    elif not dates and (repository.lastrun is None or repository.lastrun == '') and repository.frequency != 0:
+    elif not dates and (repository["lastrun"] is None or repository["lastrun"] == '') and repository["frequency"] != 0:
         # First time we harvest from this repository
         harvested_files_list = harvest_by_dates(repository, harvestpath)
-        update_lastrun(repository.id)
+        update_lastrun(repository["id"])
 
-    elif not dates and repository.frequency != 0:
+    elif not dates and repository["frequency"] != 0:
         # Just a regular update from last time it ran
         ### check that update is actually needed,
         ### i.e. lastrun+frequency>today
         timenow = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
         lastrundate = re.sub(r'\.[0-9]+$', '',
-                             str(repository.lastrun))  # remove trailing .00
-        timeinsec = int(repository.frequency) * 60 * 60
+                             str(repository["lastrun"]))  # remove trailing .00
+        timeinsec = int(repository["frequency"]) * 60 * 60
         updatedue = add_timestamp_and_timelag(lastrundate, timeinsec)
         proceed = compare_timestamps_with_tolerance(updatedue, timenow)
         if proceed != 1:
             # update needed!
-            fromdate = str(repository.lastrun)
+            fromdate = str(repository["lastrun"])
             # get rid of time of the day for the moment
             fromdate = fromdate.split()[0]
             harvested_files_list = harvest_by_dates(repository, harvestpath,
                                                     fromdate=fromdate)
-            update_lastrun(repository.id)
+            update_lastrun(repository["id"])
         else:
             return []  # No actual error here.
 
-    elif not dates and repository.frequency == 0:
+    elif not dates and repository["frequency"] == 0:
         return []  # No actual error here.
     return harvested_files_list
 
@@ -467,8 +467,8 @@ def harvest_by_identifiers(repository, identifiers, harvestpath):
     count = 0
     for oai_identifier in identifiers:
         count += 1
-        harvested_files_list.extend(oai_harvest_get(prefix=repository.metadataprefix,
-                                                    baseurl=repository.baseurl,
+        harvested_files_list.extend(oai_harvest_get(prefix=repository["metadataprefix"],
+                                                    baseurl=repository["baseurl"],
                                                     harvestpath=harvestpath,
                                                     verb="GetRecord",
                                                     identifier=oai_identifier))
@@ -489,20 +489,20 @@ def harvest_by_dates(repository, harvestpath, fromdate=None, todate=None):
 
     The records will be harvested into the specified filepath.
     """
-    if fromdate and todate:
-        dates = "from %s to %s" % (fromdate, todate)
-    elif fromdate:
-        dates = "from %s" % (fromdate,)
-    else:
-        dates = ""
+    #if fromdate and todate:
+    #    dates = "from %s to %s" % (fromdate, todate)
+    #elif fromdate:
+    #    dates = "from %s" % (fromdate,)
+    #else:
+    #    dates = ""
 
     try:
-        file_list = oai_harvest_get(prefix=repository.metadataprefix,
-                                    baseurl=repository.baseurl,
+        file_list = oai_harvest_get(prefix=repository["metadataprefix"],
+                                    baseurl=repository["baseurl"],
                                     harvestpath=harvestpath,
                                     fro=fromdate,
                                     until=todate,
-                                    setspecs=repository.setspecs)
+                                    setspecs=repository["setspecs"])
     except StandardError as e:
         # exception already dealt with, just noting the error.
         raise e
@@ -537,7 +537,7 @@ def oai_harvest_get(prefix, baseurl, harvestpath,
             sets = [oai_set.strip() for oai_set in setspecs.split(' ')]
 
         harvested_files = getter.harvest(network_location, path, http_param_dict, method, harvestpath,
-                                                     sets, secure, user, password, cert_file, key_file)
+                                         sets, secure, user, password, cert_file, key_file)
         if verb == "ListRecords":
             remove_duplicates(harvested_files)
         return harvested_files

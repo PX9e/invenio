@@ -54,6 +54,12 @@ class OaiHARVEST(db.Model):
     def get_arguments(self):
         return deserialize_via_marshal(self.arguments)
 
+    def to_dict(self):
+        dict_representation = self.__dict__
+        del dict_representation["_sa_instance_state"]
+        dict_representation["arguments"] = deserialize_via_marshal( dict_representation["arguments"])
+        return dict_representation
+
     @classmethod
     def get(cls, *criteria, **filters):
         """ A wrapper for the filter and filter_by functions of sqlalchemy.

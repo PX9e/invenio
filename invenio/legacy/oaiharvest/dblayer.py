@@ -16,7 +16,9 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
 import time
+
 from invenio.legacy.dbquery import run_sql
+from invenio 
 from invenio.utils.serializers import serialize_via_marshal
 from invenio.legacy.bibrecord import create_records, record_extract_oai_id
 
@@ -405,6 +407,7 @@ def update_lastrun(index):
         successfully harvested """
     try:
         today = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        #OaiHARVEST.query.
         sql = 'UPDATE oaiHARVEST SET lastrun=%s WHERE id=%s'
         run_sql(sql, (today, index))
         return 1
