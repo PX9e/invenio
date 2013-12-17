@@ -445,7 +445,9 @@ def harvest_step(repository, harvestpath, identifiers, dates):
             fromdate = fromdate.split()[0]
             harvested_files_list = harvest_by_dates(repository, harvestpath,
                                                     fromdate=fromdate)
-            update_lastrun(repository["id"])
+            from invenio.legacy.bibsched.bibtask import write_message
+
+            write_message(update_lastrun(repository["id"]))
         else:
             return []  # No actual error here.
 

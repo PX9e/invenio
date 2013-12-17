@@ -10,7 +10,10 @@ from time import sleep
 
 def get_nb_workflow_created(obj, eng):
     eng.log.info("last task name: get_nb_workflow_created")
-    return eng.extra_data["nb_workflow"]
+    try:
+        return eng.extra_data["nb_workflow"]
+    except KeyError:
+        return "0"
 
 
 def start_workflow(workflow_to_run="default", data=None, copy=True, **kwargs):
@@ -198,7 +201,9 @@ def get_workflows_progress(obj,eng):
     try:
         return (eng.extra_data["nb_workflow_finish"]*100.0)/(eng.extra_data["nb_workflow"])
     except KeyError:
-        return None
+        return "No progress (key missing)"
+    except ZeroDivisionError:
+        return "No workflows"
 
 def workflows_reviews(obj, eng):
     """

@@ -225,7 +225,6 @@ def harvest_records(obj, eng):
 
     if len(harvested_files_list) == 0:
         eng.log.error("No records harvested for %s" % (obj.data["name"],))
-        return None
         # Retrieve all OAI IDs and set active list
 
     harvested_identifier_list.append(collect_identifiers(harvested_files_list))
