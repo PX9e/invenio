@@ -16,12 +16,11 @@
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
 
 import time
-
 from sqlalchemy import func
+from invenio.ext.sqlalchemy import db
 from invenio.legacy.dbquery import run_sql
 from invenio.modules.oai_harvest.models import OaiHARVEST, OaiHARVESTLOG
 from invenio.legacy.bibrecord import create_records, record_extract_oai_id
-
 
 
 class HistoryEntry:
@@ -32,6 +31,7 @@ class HistoryEntry:
     bibupload_task_id = ""
     inserted_to_db = ""
     oai_src_id = 0
+
     def __init__(self, date_harvested, date_inserted, oai_src_id, oai_id, record_id, inserted_to_db, bibupload_task_id):
         self.date_harvested = date_harvested
         self.date_inserted = date_inserted
@@ -40,6 +40,7 @@ class HistoryEntry:
         self.bibupload_task_id = bibupload_task_id
         self.oai_src_id = oai_src_id
         self.inserted_to_db = inserted_to_db
+
     def __repr__(self):
         return str(self)
 
@@ -54,51 +55,65 @@ class HistoryEntry:
                "oai_src_id: " + str(self.oai_src_id) + ', ' + ")"
 
 
-def get_history_entries_raw(query_suffix, sqlparameters):
-    """
-       Internally used function which obtains sql query suffix ( starting from WHERE)
-       and
-    """
-    query_prefix = "SELECT date_harvested, date_inserted, id_oaiHARVEST, oai_id, id_bibrec, inserted_to_db, bibupload_task_id FROM oaiHARVESTLOG "
-    query = query_prefix + query_suffix
-    res = run_sql(query, sqlparameters)
+def get_history_entries(oai_src_id, oai_date, method="harvested"):
+    column = None
+    if method == "inserted":
+        column = OaiHARVESTLOG.date_inserted
+    elif method == "harvested":
+        column = OaiHARVESTLOG.date_harvested
+
+    res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
+                   OaiHARVESTLOG.id_oaiHARVEST, OaiHARVESTLOG.oai_id, OaiHARVESTLOG.id_bibrec,
+                   OaiHARVESTLOG.inserted_to_db, OaiHARVESTLOG.bibupload_task_id) \
+        .filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id) \
+        .filter(func.MONTH(column) == oai_date.month) \
+        .filter(func.YEAR(column) == oai_date.year) \
+        .order_by(column).all()
     result = []
     for entry in res:
         result.append(HistoryEntry(entry[0], entry[1],
-                      int(entry[2]), str(entry[3]), int(entry[4]),
-                      str(entry[5]), int(entry[6])))
+                                   int(entry[2]), str(entry[3]), int(entry[4]),
+                                   str(entry[5]), int(entry[6])))
     return result
 
 
-def get_history_entries(oai_src_id, monthdate, method="harvested"):
-    sql_column = "date_harvested"
-    if method == "inserted":
-        sql_column = "date_inserted"
-    query_suffix = "WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column + ") = %s ORDER BY " + sql_column
-
-    return get_history_entries_raw(query_suffix,(str(oai_src_id), str(monthdate.month), str(monthdate.year)))
-
-
-def get_history_entries_for_day(oai_src_id, date, limit = -1, start = 0, method = "harvested"):
+def get_history_entries_for_day(oai_src_id, oai_date, limit=-1, start=0, method="harvested"):
     """
        Returns harvesting history entries for a given day
        @param oai_src_id: harvesting source identifier
-       @param date: Date designing the deserved day
+       @param oai_date: Date designing the deserved day
        @param limit: How many records (at most) do we want to get
        @param start: From which index do we want to start ?
        @param method: method of getting data (two possible values "harvested" and "inserted")
                  Describes if the harvesting or inserting data should be used
     """
-    sql_column = "date_harvested"
+    column = None
     if method == "inserted":
-        sql_column = "date_inserted"
+        column = OaiHARVESTLOG.date_inserted
+    elif method == "harvested":
+        column = OaiHARVESTLOG.date_harvested
 
-    query_suffix = "WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column + ") = %s  AND DAY(" + sql_column + ") = %s ORDER BY " + sql_column
+    res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
+                   OaiHARVESTLOG.id_oaiHARVEST, OaiHARVESTLOG.oai_id, OaiHARVESTLOG.id_bibrec,
+                   OaiHARVESTLOG.inserted_to_db, OaiHARVESTLOG.bibupload_task_id) \
+        .filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id) \
+        .filter(func.MONTH(column) == oai_date.month) \
+        .filter(func.YEAR(column) == oai_date.year) \
+        .filter(func.DAY(column) == oai_date.day) \
+        .order_by(column)
     if limit > 0:
-        query_suffix += " LIMIT " + str(start) + "," + str(limit)
-    return get_history_entries_raw(query_suffix, (str(oai_src_id), str(date.month), str(date.year), str(date.day)))
+        res = res.all()[start:start + limit]
+    else:
+        res = res.all()
+    result = []
+    for entry in res:
+        result.append(HistoryEntry(entry[0], entry[1],
+                                   int(entry[2]), str(entry[3]), int(entry[4]),
+                                   str(entry[5]), int(entry[6])))
+    return result
 
-def get_entry_history(oai_id, start=0, limit=-1, method="harvested"):
+
+def get_entry_history(oai_src_id, start=0, limit=-1, method="harvested"):
     """
        Returns harvesting history entries for a given OAI identifier ( Show results from multiple sources )
        @limit - How many records (at most) do we want to get
@@ -106,28 +121,55 @@ def get_entry_history(oai_id, start=0, limit=-1, method="harvested"):
        @method - method of getting data (two possible values "harvested" and "inserted")
                  Describes if the harvesting or inserting data should be used
     """
-    sql_column = "date_harvested"
+
     if method == "inserted":
-        sql_column = "date_inserted"
-    query_suffix = "WHERE oai_id = %s ORDER BY " + sql_column
+        column = OaiHARVESTLOG.date_inserted
+    elif method == "harvested":
+        column = OaiHARVESTLOG.date_harvested
+
+    res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
+                   OaiHARVESTLOG.id_oaiHARVEST, OaiHARVESTLOG.oai_id, OaiHARVESTLOG.id_bibrec,
+                   OaiHARVESTLOG.inserted_to_db, OaiHARVESTLOG.bibupload_task_id) \
+        .filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id) \
+        .order_by(column)
     if limit > 0:
-        query_suffix += " LIMIT " + str(start) + "," + str(limit)
-    return get_history_entries_raw(query_suffix, (str(oai_id),))
+        res = res[start:start + limit]
+    else:
+        res = res.all()
+    result = []
+    for entry in res:
+        result.append(HistoryEntry(entry[0], entry[1],
+                                   int(entry[2]), str(entry[3]), int(entry[4]),
+                                   str(entry[5]), int(entry[6])))
+    return result
 
 
-def get_month_logs_size(oai_src_id, date, method = "harvested"):
+
+def get_month_logs_size(oai_src_id, oai_date, method="harvested"):
     """
     Function which returns number of inserts which took place in given month (splited into days)
     @param oai_src_id: harvesting source identifier
     @return: Dictionary of harvesting statistics - keys describe days. values - numbers of inserted recordds
     """
-    sql_column = "date_harvested"
+
+    res = None
     if method == "inserted":
-        sql_column = "date_inserted"
-    query = "SELECT DAY(" + sql_column + "), COUNT(*) FROM oaiHARVESTLOG WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column + ")= %s GROUP BY DAY(" + sql_column+ ")"
-    query_result = run_sql(query, (str(oai_src_id), str(date.month), str(date.year)))
-    result = {}
-    for entry in query_result:
+        res = db.session.query(func.DAY(OaiHARVESTLOG.date_harvested),
+                               func.count(func.DAY(OaiHARVESTLOG.date_harvested))).filter(
+            OaiHARVESTLOG.id_oaiHARVEST == 1) \
+            .filter(func.MONTH(OaiHARVESTLOG.date_harvested) == oai_date.month) \
+            .filter(func.YEAR(OaiHARVESTLOG.date_harvested) == oai_date.year) \
+            .group_by(func.DAY(OaiHARVESTLOG.date_harvested)).all()
+    elif method == "harvested":
+        res = db.session.query(func.DAY(OaiHARVESTLOG.date_harvested),
+                               func.count(func.DAY(OaiHARVESTLOG.date_harvested))).filter(
+            OaiHARVESTLOG.id_oaiHARVEST == 1) \
+            .filter(func.MONTH(OaiHARVESTLOG.date_harvested) == oai_date.month) \
+            .filter(func.YEAR(OaiHARVESTLOG.date_harvested) == oai_date.year) \
+            .group_by(func.DAY(OaiHARVESTLOG.date_harvested)).all()
+
+    result = []
+    for entry in res:
         if int(entry[0]) != 0:
             result[int(entry[0])] = int(entry[1])
     return result
@@ -142,20 +184,20 @@ def get_day_logs_size(oai_src_id, date, method="harvested"):
     sql_column = "date_harvested"
     if method == "inserted":
         sql_column = "date_inserted"
-    query = "SELECT COUNT(*) FROM oaiHARVESTLOG WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column+ ")= %s AND DAY(" + sql_column + ") = %s"
+    query = "SELECT COUNT(*) FROM oaiHARVESTLOG WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column + ")= %s AND DAY(" + sql_column + ") = %s"
     query_result = run_sql(query, (str(oai_src_id), str(date.month), str(date.year), str(date.day)))
     for entry in query_result:
         return int(entry[0])
     return 0
 
 
-def get_entry_logs_size(oai_id):
+def get_entry_logs_size(oai_src_id):
     """
     Function which returns number of inserts which took place in given day
     @param oai_src_id: harvesting source identifier
     @return: Number of inserts during the given day
     """
-    return OaiHARVESTLOG.query.filter(OaiHARVESTLOG.id_oaiHARVEST == oai_id).count()
+    return OaiHARVESTLOG.query.filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id).count()
 
 
 def delete_holdingpen_entry(hpupdate_id):
@@ -170,7 +212,8 @@ def get_holdingpen_day_fragment(year, month, day, limit, start, filter_key):
     filterSql = ""
     if filter_key != "":
         filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
-    query = "SELECT oai_id, changeset_date, changeset_id FROM bibHOLDINGPEN WHERE changeset_date > '%i-%i-%i 00:00:00' and changeset_date <= '%i-%i-%i 23:59:59' %s ORDER BY changeset_date LIMIT %i, %i" % (year, month, day, year, month, day, filterSql, start, limit)
+    query = "SELECT oai_id, changeset_date, changeset_id FROM bibHOLDINGPEN WHERE changeset_date > '%i-%i-%i 00:00:00' and changeset_date <= '%i-%i-%i 23:59:59' %s ORDER BY changeset_date LIMIT %i, %i" % (
+        year, month, day, year, month, day, filterSql, start, limit)
     query_results = run_sql(query)
     return query_results
 
@@ -182,7 +225,8 @@ def get_holdingpen_day_size(year, month, day, filter_key):
     filterSql = ""
     if filter_key != "":
         filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
-    query = "SELECT count(*) FROM bibHOLDINGPEN WHERE year(changeset_date) = '%i' and month(changeset_date) = '%i' and day(changeset_date) = '%i' %s" % (year, month, day, filterSql)
+    query = "SELECT count(*) FROM bibHOLDINGPEN WHERE year(changeset_date) = '%i' and month(changeset_date) = '%i' and day(changeset_date) = '%i' %s" % (
+        year, month, day, filterSql)
     query_results = run_sql(query)
     return int(query_results[0][0])
 
@@ -195,7 +239,8 @@ def get_holdingpen_month(year, month, filter_key):
     if filter_key != "":
         filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
 
-    query = "select day(changeset_date), count(*) from bibHOLDINGPEN where year(changeset_date) = '%i' and month(changeset_date) = '%i' %s group by day(changeset_date)" % (year, month, filterSql)
+    query = "select day(changeset_date), count(*) from bibHOLDINGPEN where year(changeset_date) = '%i' and month(changeset_date) = '%i' %s group by day(changeset_date)" % (
+        year, month, filterSql)
     return run_sql(query)
 
 
@@ -206,7 +251,8 @@ def get_holdingpen_year(year, filter_key):
     filterSql = ""
     if filter_key != "":
         filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
-    query = "select month(changeset_date), count(*) from bibHOLDINGPEN where year(changeset_date) = '%i' %s group by month(changeset_date)" % (year, filterSql)
+    query = "select month(changeset_date), count(*) from bibHOLDINGPEN where year(changeset_date) = '%i' %s group by month(changeset_date)" % (
+        year, filterSql)
     return run_sql(query)
 
 
@@ -217,7 +263,8 @@ def get_holdingpen_years(filter_key):
     filterSql = ""
     if filter_key != "":
         filterSql = " where oai_id like '%%%s%%' " % (filter_key, )
-    query = "select year(changeset_date), count(*) changeset_date from bibHOLDINGPEN %s group by year(changeset_date)" % (filterSql,)
+    query = "select year(changeset_date), count(*) changeset_date from bibHOLDINGPEN %s group by year(changeset_date)" % (
+        filterSql,)
     results = run_sql(query)
     return results
 
