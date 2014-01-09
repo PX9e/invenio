@@ -37,6 +37,8 @@ from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
                             CFG_SITE_SUPPORT_EMAIL
                             )
 
+from invenio.modules.oai_harvest.models import  OaiHARVEST
+
 from invenio.legacy.oaiharvest.config import InvenioOAIHarvestWarning
 
 from invenio.legacy.bibsched.bibtask import (task_get_task_param,
@@ -50,16 +52,18 @@ from invenio.legacy.oaiharvest import getter
 from invenio.ext.logging import register_exception
 
 from invenio.base.factory import with_app_context
-from invenio.legacy.oaiharvest.dblayer import create_oaiharvest_log_str
 
 from invenio.legacy.oaiharvest.utils import (compare_timestamps_with_tolerance,
-                                             generate_harvest_report)
+                                             generate_harvest_report, create_ticket
+                                             )
 
 from invenio.legacy.webuser import email_valid_p
 from invenio.ext.email import send_email
 
 from invenio.modules.workflows.models import (BibWorkflowEngineLog,
-                                              BibWorkflowObjectLog)
+                                              BibWorkflowObjectLog
+                                              )
+
 from invenio.modules.workflows.api import start
 from invenio.modules.workflows.errors import WorkflowError
 
@@ -71,10 +75,8 @@ oaiharvest_templates = invenio.legacy.template.load('oaiharvest')
 def task_run_core():
     start_time = time.time()
 
-    try:
-        workflow_name = task_get_option("workflow")
-    except KeyError:
-        workflow_name = "generic_harvesting_workflow"
+    workflow_name = task_get_option("workflow")
+
 
     try:
         workflow = start(workflow_name, data=[123], stop_on_error=True, options=task_get_option(None))
@@ -168,17 +170,6 @@ def task_run_core():
             return True
     else:
         return True
-
-
-def create_oaiharvest_log(task_id, oai_src_id, marcxmlfile):
-    """
-    Function which creates the harvesting logs
-    @param task_id bibupload task id
-    """
-    file_fd = open(marcxmlfile, "r")
-    xml_content = file_fd.read(-1)
-    file_fd.close()
-    create_oaiharvest_log_str(task_id, oai_src_id, xml_content)
 
 
 def get_dates(dates):
@@ -293,7 +284,8 @@ def main():
                                     "key=",
                                     "user=",
                                     "password=",
-                                    "workflow="]
+                                    "workflow=",
+                                  ]
         )
 
 
@@ -397,14 +389,22 @@ def main():
     # Note that the 'help' is common to both manual and automated
     # mode.
 
-
     num_of_critical_parameter = 0
-
+    num_of_critical_parameterb = 0
+    i = 0
+    reposname = None
     for opt in sys.argv[1:]:
-        if opt in ("-r", "--repository") or opt in "--workflow":
+        if opt in "-r"or opt in "--repository":
             num_of_critical_parameter += 1
-        if num_of_critical_parameter > 1:
-            usage(1, "You can't specify twice -r or --workflow or -r and --workflow !")
+        elif opt in "--workflow":
+            num_of_critical_parameterb += 1
+        if num_of_critical_parameter > 1 or num_of_critical_parameterb > 1:
+            usage(1, "You can't specify twice -r or --workflow")
+
+    if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
+        print OaiHARVEST.get(OaiHARVEST.name == reposname).all()
+    elif num_of_critical_parameter == 1 and num_of_critical_parameterb == 1:
+        print "FIXME"
 
     task_set_option("repository", None)
     task_set_option("dates", None)

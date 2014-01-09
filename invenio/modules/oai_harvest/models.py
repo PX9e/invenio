@@ -45,10 +45,9 @@ class OaiHARVEST(db.Model):
     comment = db.Column(db.Text, nullable=True)
     name = db.Column(db.String(255), nullable=False)
     lastrun = db.Column(db.DateTime, nullable=True)
-    frequency = db.Column(db.MediumInteger(12), nullable=False,
-                          server_default='0')
     postprocess = db.Column(db.String(20), nullable=False,
                             server_default='h')
+    workflows = db.Column(db.String(255), nullable=True)
     setspecs = db.Column(db.Text, nullable=False)
 
     def get_arguments(self):

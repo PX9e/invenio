@@ -14,6 +14,7 @@
 ## You should have received a copy of the GNU General Public License
 ## along with Invenio; if not, write to the Free Software Foundation, Inc.,
 ## 59 Temple Place, Suite 330, Boston, MA 02111-1307, USA.
+from datetime import datetime
 
 import time
 from sqlalchemy import func
@@ -56,10 +57,9 @@ class HistoryEntry:
 
 
 def get_history_entries(oai_src_id, oai_date, method="harvested"):
-    column = None
     if method == "inserted":
         column = OaiHARVESTLOG.date_inserted
-    elif method == "harvested":
+    else:
         column = OaiHARVESTLOG.date_harvested
 
     res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
@@ -87,12 +87,11 @@ def get_history_entries_for_day(oai_src_id, oai_date, limit=-1, start=0, method=
        @param method: method of getting data (two possible values "harvested" and "inserted")
                  Describes if the harvesting or inserting data should be used
     """
-    column = None
+
     if method == "inserted":
         column = OaiHARVESTLOG.date_inserted
-    elif method == "harvested":
+    else:
         column = OaiHARVESTLOG.date_harvested
-
     res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
                    OaiHARVESTLOG.id_oaiHARVEST, OaiHARVESTLOG.oai_id, OaiHARVESTLOG.id_bibrec,
                    OaiHARVESTLOG.inserted_to_db, OaiHARVESTLOG.bibupload_task_id) \
@@ -124,9 +123,8 @@ def get_entry_history(oai_src_id, start=0, limit=-1, method="harvested"):
 
     if method == "inserted":
         column = OaiHARVESTLOG.date_inserted
-    elif method == "harvested":
+    else:
         column = OaiHARVESTLOG.date_harvested
-
     res = db.query(OaiHARVESTLOG.date_harvested, OaiHARVESTLOG.date_inserted,
                    OaiHARVESTLOG.id_oaiHARVEST, OaiHARVESTLOG.oai_id, OaiHARVESTLOG.id_bibrec,
                    OaiHARVESTLOG.inserted_to_db, OaiHARVESTLOG.bibupload_task_id) \
@@ -144,50 +142,49 @@ def get_entry_history(oai_src_id, start=0, limit=-1, method="harvested"):
     return result
 
 
-
 def get_month_logs_size(oai_src_id, oai_date, method="harvested"):
     """
     Function which returns number of inserts which took place in given month (splited into days)
     @param oai_src_id: harvesting source identifier
     @return: Dictionary of harvesting statistics - keys describe days. values - numbers of inserted recordds
     """
-
-    res = None
     if method == "inserted":
-        res = db.session.query(func.DAY(OaiHARVESTLOG.date_harvested),
-                               func.count(func.DAY(OaiHARVESTLOG.date_harvested))).filter(
-            OaiHARVESTLOG.id_oaiHARVEST == 1) \
-            .filter(func.MONTH(OaiHARVESTLOG.date_harvested) == oai_date.month) \
-            .filter(func.YEAR(OaiHARVESTLOG.date_harvested) == oai_date.year) \
-            .group_by(func.DAY(OaiHARVESTLOG.date_harvested)).all()
-    elif method == "harvested":
-        res = db.session.query(func.DAY(OaiHARVESTLOG.date_harvested),
-                               func.count(func.DAY(OaiHARVESTLOG.date_harvested))).filter(
-            OaiHARVESTLOG.id_oaiHARVEST == 1) \
-            .filter(func.MONTH(OaiHARVESTLOG.date_harvested) == oai_date.month) \
-            .filter(func.YEAR(OaiHARVESTLOG.date_harvested) == oai_date.year) \
-            .group_by(func.DAY(OaiHARVESTLOG.date_harvested)).all()
-
-    result = []
+        column = OaiHARVESTLOG.date_inserted
+    else:
+        column = OaiHARVESTLOG.date_harvested
+    res = db.session.query(func.DAY(column), func.count(func.DAY(column)))\
+        .filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id) \
+        .filter(func.MONTH(column) == oai_date.month) \
+        .filter(func.YEAR(column) == oai_date.year) \
+        .group_by(func.DAY(column)).all()
+    result = {}
     for entry in res:
         if int(entry[0]) != 0:
             result[int(entry[0])] = int(entry[1])
     return result
 
 
-def get_day_logs_size(oai_src_id, date, method="harvested"):
+def get_day_logs_size(oai_src_id, oai_date, method="harvested"):
     """
     Function which returns number of inserts which took place in given day
     @param oai_src_id: harvesting source identifier
     @return: Number of inserts during the given day
     """
-    sql_column = "date_harvested"
+    #sql_column = "date_harvested"
+    #if method == "inserted":
+    #    sql_column = "date_inserted"
+    #
+
     if method == "inserted":
-        sql_column = "date_inserted"
-    query = "SELECT COUNT(*) FROM oaiHARVESTLOG WHERE id_oaiHARVEST = %s AND MONTH(" + sql_column + ") = %s AND YEAR(" + sql_column + ")= %s AND DAY(" + sql_column + ") = %s"
-    query_result = run_sql(query, (str(oai_src_id), str(date.month), str(date.year), str(date.day)))
-    for entry in query_result:
-        return int(entry[0])
+        column = OaiHARVESTLOG.date_inserted
+    else:
+        column = OaiHARVESTLOG.date_harvested
+    res = db.session.query(func.count(column)).filter(OaiHARVESTLOG.id_oaiHARVEST == oai_src_id)\
+        .filter(func.MONTH(column) == oai_date.month)\
+        .filter(func.YEAR(column) == oai_date.year)\
+        .filter(func.DAY(column) == oai_date.day).one()
+    if res:
+        return int(res[0])
     return 0
 
 
@@ -209,11 +206,11 @@ def get_holdingpen_day_fragment(year, month, day, limit, start, filter_key):
     """
        returning the entries form the a particular day
     """
-    filterSql = ""
+    filtersql = ""
     if filter_key != "":
-        filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
+        filtersql = " and oai_id like '%%%s%%' " % (filter_key, )
     query = "SELECT oai_id, changeset_date, changeset_id FROM bibHOLDINGPEN WHERE changeset_date > '%i-%i-%i 00:00:00' and changeset_date <= '%i-%i-%i 23:59:59' %s ORDER BY changeset_date LIMIT %i, %i" % (
-        year, month, day, year, month, day, filterSql, start, limit)
+        year, month, day, year, month, day, filtersql, start, limit)
     query_results = run_sql(query)
     return query_results
 
@@ -222,11 +219,11 @@ def get_holdingpen_day_size(year, month, day, filter_key):
     """
        returning the entries form the a particular day
     """
-    filterSql = ""
+    filtersql = ""
     if filter_key != "":
-        filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
+        filtersql = " and oai_id like '%%%s%%' " % (filter_key, )
     query = "SELECT count(*) FROM bibHOLDINGPEN WHERE year(changeset_date) = '%i' and month(changeset_date) = '%i' and day(changeset_date) = '%i' %s" % (
-        year, month, day, filterSql)
+        year, month, day, filtersql)
     query_results = run_sql(query)
     return int(query_results[0][0])
 
@@ -235,12 +232,12 @@ def get_holdingpen_month(year, month, filter_key):
     """
        Returning the statistics about the entries form a particular month
     """
-    filterSql = ""
+    filtersql = ""
     if filter_key != "":
-        filterSql = " and oai_id like '%%%s%%' " % (filter_key, )
+        filtersql = " and oai_id like '%%%s%%' " % (filter_key, )
 
     query = "select day(changeset_date), count(*) from bibHOLDINGPEN where year(changeset_date) = '%i' and month(changeset_date) = '%i' %s group by day(changeset_date)" % (
-        year, month, filterSql)
+        year, month, filtersql)
     return run_sql(query)
 
 
@@ -260,11 +257,11 @@ def get_holdingpen_years(filter_key):
     """
     Returning the particular years of records present in the holding pen
     """
-    filterSql = ""
+    filtersql = ""
     if filter_key != "":
-        filterSql = " where oai_id like '%%%s%%' " % (filter_key, )
+        filtersql = " where oai_id like '%%%s%%' " % (filter_key, )
     query = "select year(changeset_date), count(*) changeset_date from bibHOLDINGPEN %s group by year(changeset_date)" % (
-        filterSql,)
+        filtersql,)
     results = run_sql(query)
     return results
 
@@ -298,7 +295,13 @@ def create_oaiharvest_log_str(task_id, oai_src_id, xml_content):
         records = create_records(xml_content)
         for record in records:
             oai_id = record_extract_oai_id(record[0])
-            query = "INSERT INTO oaiHARVESTLOG (id_oaiHARVEST, oai_id, date_harvested, bibupload_task_id) VALUES (%s, %s, NOW(), %s)"
-            run_sql(query, (str(oai_src_id), str(oai_id), str(task_id)))
+            my_new_harvest_log = OaiHARVESTLOG()
+            my_new_harvest_log.id_oaiHARVEST = oai_src_id
+            my_new_harvest_log.oai_id = oai_id
+            my_new_harvest_log.date_harvested = datetime.datetime.now
+            my_new_harvest_log.bibupload_task_id = task_id
+            db.session.add(my_new_harvest_log)
+            db.session.commit()
     except Exception, msg:
         print "Logging exception : %s   " % (str(msg),)
+

@@ -157,7 +157,6 @@ def get_repositories_list(repositories):
 
     def _get_repositories_list(obj, eng):
 
-
         obj.extra_data["last_task_name"] = "last task name: _get_repositories_list"
 
         reposlist_temp = None
@@ -166,7 +165,6 @@ def get_repositories_list(repositories):
             for reposname in repositories:
                 reposlist_temp = OaiHARVEST.get(OaiHARVEST.name == reposname).all()
         else:
-
             reposlist_temp = OaiHARVEST.get(OaiHARVEST.name != "").all()
         true_repo_list = []
         for repo in reposlist_temp:
@@ -686,14 +684,3 @@ def upload_step(obj, eng):
                            'bst_run_bibtask[taskname="webcoll", user="oaiharvest", P="6", c="HEP"]']
         task_low_level_submission("bibindex", "oaiharvest", *tuple(bibindex_params))
     eng.log.info("end of upload")
-
-
-def create_oaiharvest_log(task_id, oai_src_id, marcxmlfile):
-    """
-    Function which creates the harvesting logs
-    @param task_id bibupload task id
-    """
-    file_fd = open(marcxmlfile, "r")
-    xml_content = file_fd.read(-1)
-    file_fd.close()
-    create_oaiharvest_log_str(task_id, oai_src_id, xml_content)

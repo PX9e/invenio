@@ -48,7 +48,6 @@ from invenio.legacy.oaiharvest.dblayer import (get_month_logs_size,
                                                get_history_entries_for_day,
                                                get_day_logs_size, get_entry_history,
                                                get_entry_logs_size,
-                                               get_holdingpen_entries,
                                                delete_holdingpen_entry,
                                                get_holdingpen_years,
                                                get_holdingpen_month,
@@ -69,8 +68,7 @@ from invenio.base.i18n import gettext_set_language
 
 tmppath = CFG_TMPDIR + '/oaiharvestadmin.' + str(os.getpid())
 guideurl = "help/admin/oaiharvest-admin-guide"
-oai_harvest_admin_url = CFG_SITE_URL + \
-                        "/admin/oaiharvest/oaiharvestadmin.py"
+oai_harvest_admin_url = CFG_SITE_URL + "/admin/oaiharvest/oaiharvestadmin.py"
 
 freqs = [[0, "never"],
          [24, "daily"],
@@ -121,34 +119,25 @@ def perform_request_index(ln=CFG_SITE_LANG):
 
     titlebar = oaiharvest_templates.tmpl_draw_titlebar(ln=ln, title=_("Overview of sources"), guideurl=guideurl,
                                                        extraname="add new OAI source",
-                                                       extraurl="admin/oaiharvest/oaiharvestadmin.py/addsource?ln=" + ln)
+                                                       extraurl="admin/oaiharvest/oaiharvestadmin.py/addsource?ln="
+                                                                + ln)
     titlebar2 = oaiharvest_templates.tmpl_draw_titlebar(ln=ln, title=_("Harvesting status"), guideurl=guideurl)
-    header = ['name', 'baseURL', 'metadataprefix', 'frequency',
-              'bibconvertfile', 'postprocess', 'actions']
+    header = ['name', 'baseURL', 'metadataprefix', 'bibconvertfile', 'postprocess', 'actions']
     header2 = ['name', 'last update']
     oai_src = get_oai_src()
     upd_status = get_update_status()
 
     sources = []
     for (oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix,
-         oai_src_frequency, oai_src_config, oai_src_post,
+        oai_src_config, oai_src_post,
          dummy_oai_src_bibfilter, dummy_oai_src_setspecs) in oai_src:
 
         default_link_argd = {'ln': ln,
                              'oai_src_id': str(oai_src_id)}
-        namelinked = create_html_link(urlbase=oai_harvest_admin_url +
-                                              "/editsource",
+        namelinked = create_html_link(urlbase=oai_harvest_admin_url + "/editsource",
                                       urlargd=default_link_argd,
                                       link_label=cgi.escape(oai_src_name))
         freq = _("Not Set")
-        if oai_src_frequency == 0:
-            freq = _("never")
-        elif oai_src_frequency == 24:
-            freq = _("daily")
-        elif oai_src_frequency == 168:
-            freq = _("weekly")
-        elif oai_src_frequency == 720:
-            freq = _("monthly")
         action = generate_sources_actions_menu(oai_src_id, ln)
         sources.append([namelinked, oai_src_baseurl, oai_src_prefix,
                         freq, oai_src_config, oai_src_post, action])
@@ -184,7 +173,6 @@ def perform_request_index(ln=CFG_SITE_LANG):
 
 def perform_request_editsource(oai_src_id=None, oai_src_name='',
                                oai_src_baseurl='', oai_src_prefix='',
-                               oai_src_frequency='',
                                oai_src_config='',
                                oai_src_post='', ln=CFG_SITE_LANG,
                                confirm=-1, oai_src_sets=None,
@@ -208,7 +196,7 @@ def perform_request_editsource(oai_src_id=None, oai_src_name='',
         oai_src_name = oai_src[0][1]
         oai_src_baseurl = oai_src[0][2]
         oai_src_prefix = oai_src[0][3]
-        oai_src_frequency = oai_src[0][4]
+
         oai_src_config = oai_src[0][5]
         oai_src_post = oai_src[0][6]
         oai_src_sets = oai_src[0][7].split()
@@ -220,8 +208,6 @@ def perform_request_editsource(oai_src_id=None, oai_src_name='',
         output += webstyle_templates.tmpl_write_warning(_("Please enter a metadata prefix."))
     elif confirm in [1, "1"] and not oai_src_baseurl:
         output += webstyle_templates.tmpl_write_warning(_("Please enter a base url."))
-    elif confirm in [1, "1"] and not oai_src_frequency:
-        output += webstyle_templates.tmpl_write_warning(_("Please choose a frequency of harvesting"))
     elif confirm in [1, "1"] and "c" in oai_src_post and (not oai_src_config or validatefile(oai_src_config) != 0):
         output += webstyle_templates.tmpl_write_warning(_("You selected a postprocess mode which involves conversion."))
         output += webstyle_templates.tmpl_write_warning(
@@ -232,13 +218,11 @@ def perform_request_editsource(oai_src_id=None, oai_src_name='',
         output += webstyle_templates.tmpl_write_warning(
             _("Please enter a valid name of or a full path to a BibFilter script or change postprocess mode."))
     elif oai_src_id > -1 and confirm in [1, "1"]:
-        if not oai_src_frequency:
-            oai_src_frequency = 0
         if not oai_src_config:
             oai_src_config = "NULL"
         if not oai_src_post:
             oai_src_post = []
-        res = modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix, oai_src_frequency,
+        res = modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix,
                              oai_src_config, oai_src_post, oai_src_sets, oai_src_bibfilter)
         output += write_outcome(res)
 
@@ -273,10 +257,6 @@ def perform_request_editsource(oai_src_id=None, oai_src_name='',
     text += oaiharvest_templates.tmpl_admin_w200_text(ln=ln,
                                                       title="Metadata prefix", name="oai_src_prefix",
                                                       value=oai_src_prefix)
-    text += oaiharvest_templates.tmpl_admin_w200_select(ln=ln,
-                                                        title="Frequency", name="oai_src_frequency",
-                                                        valuenil="- select frequency -", values=freqs,
-                                                        lastval=oai_src_frequency)
     post_values = [mode[0] for mode in CFG_OAI_POSSIBLE_POSTMODES]
     post_labels = [mode[1] for mode in CFG_OAI_POSSIBLE_POSTMODES]
     post_states = [((mode[0] in oai_src_post and 1) or 0) for mode in CFG_OAI_POSSIBLE_POSTMODES]
@@ -312,7 +292,7 @@ def perform_request_editsource(oai_src_id=None, oai_src_name='',
 
 
 def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
-                              oai_src_prefix='', oai_src_frequency='',
+                              oai_src_prefix='',
                               oai_src_lastrun='', oai_src_config='',
                               oai_src_post=[], ln=CFG_SITE_LANG,
                               confirm=-1, oai_src_sets=None,
@@ -350,8 +330,6 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
             output += webstyle_templates.tmpl_write_warning(_("Please enter a name for the source."))
         elif confirm in [1, "1"] and not oai_src_prefix:
             output += webstyle_templates.tmpl_write_warning(_("Please enter a metadata prefix."))
-        elif confirm in [1, "1"] and not oai_src_frequency:
-            output += webstyle_templates.tmpl_write_warning(_("Please choose a frequency of harvesting"))
         elif confirm in [1, "1"] and not oai_src_lastrun:
             output += webstyle_templates.tmpl_write_warning(_("Please choose the harvesting starting date"))
         elif confirm in [1, "1"] and "c" in oai_src_post and (not oai_src_config or validatefile(oai_src_config) != 0):
@@ -366,8 +344,6 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
             output += webstyle_templates.tmpl_write_warning(
                 _("Please enter a valid name of or a full path to a BibFilter script or change postprocess mode."))
         elif oai_src_name and confirm in [1, "1"]:
-            if not oai_src_frequency:
-                oai_src_frequency = 0
             if not oai_src_lastrun:
                 oai_src_lastrun = 1
             if not oai_src_config:
@@ -376,7 +352,7 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
                 oai_src_post = []
 
             res = add_oai_src(oai_src_name, oai_src_baseurl,
-                              oai_src_prefix, oai_src_frequency,
+                              oai_src_prefix,
                               oai_src_lastrun, oai_src_config,
                               oai_src_post, oai_src_sets,
                               oai_src_bibfilter)
@@ -413,10 +389,9 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
             sets.sort()
             # Show available sets to users
             sets_specs = [aset[0] for aset in sets]
-            sets_labels = [((aset[1] and aset[0] + ' (' + aset[1] + ')') or aset[0]) \
-                           for aset in sets]
-            sets_states = [((aset[0] in oai_src_sets and 1) or 0)
-                           for aset in sets]
+            sets_labels = [((aset[1] and aset[0] + ' (' + aset[1] + ')') or aset[0]) for aset in sets]
+            sets_states = [((aset[0] in oai_src_sets and 1) or 0) for aset in sets]
+
             text += oaiharvest_templates.tmpl_admin_checkboxes(ln=ln,
                                                                title="Sets",
                                                                name="oai_src_sets",
@@ -431,10 +406,6 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
                                                               value=' '.join(oai_src_sets))
 
         text += oaiharvest_templates.tmpl_admin_w200_select(ln=ln,
-                                                            title="Frequency", name="oai_src_frequency",
-                                                            valuenil="- select frequency -", values=freqs,
-                                                            lastval=oai_src_frequency)
-        text += oaiharvest_templates.tmpl_admin_w200_select(ln=ln,
                                                             title="Starting date", name="oai_src_lastrun",
                                                             valuenil="- select a date -", values=dates,
                                                             lastval=oai_src_lastrun)
@@ -446,7 +417,8 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
                                                            values=post_values, labels=post_labels, states=post_states,
                                                            message="Leave all unchecked for no post-processing")
         text += oaiharvest_templates.tmpl_admin_w200_text(ln=ln,
-                                                          title="BibConvert configuration file (if needed by postprocess)",
+                                                          title="BibConvert configuration file "
+                                                                "(if needed by postprocess)",
                                                           name="oai_src_config", value=oai_src_config)
         text += oaiharvest_templates.tmpl_admin_w200_text(ln=ln,
                                                           title="BibFilter program (if needed by postprocess)",
@@ -463,10 +435,9 @@ def perform_request_addsource(oai_src_name=None, oai_src_baseurl='',
         # Could not perform first url validation
         output += oaiharvest_templates.tmpl_output_validate_info(ln, 1, str(oai_src_baseurl))
         output += oaiharvest_templates.tmpl_print_brs(ln, 2)
-        output += create_html_link(urlbase=oai_harvest_admin_url +
-                                           "/addsource",
-                                   urlargd={'ln': ln},
-                                   link_label=_("Try again with another url"))
+        output += create_html_link(urlbase=oai_harvest_admin_url + "/addsource",
+        urlargd = {'ln': ln},
+                  link_label = _("Try again with another url"))
         output += " " + _("or") + " "
         output += create_html_link(urlbase=oai_harvest_admin_url +
                                            "/addsource",
@@ -643,8 +614,7 @@ def perform_request_viewtasklogs(ln, task_id):
         file_descriptor = open(log_name)
         content = file_descriptor.read(-1)
         file_descriptor.close()
-        result += oaiharvest_templates.tmpl_draw_titlebar(ln, "Log file : " + \
-                                                              log_name, guideurl)
+        result += oaiharvest_templates.tmpl_draw_titlebar(ln, "Log file : " + log_name, guideurl)
 
         result += oaiharvest_templates.tmpl_output_scrollable_frame(
             oaiharvest_templates.tmpl_output_preformatted(content))
@@ -1034,7 +1004,8 @@ def upload_record(record=None, uploader_paremeters=None, oai_source_id=None):
     f = os.fdopen(file_descriptor, "w")
     f.write(record)
     f.close()
-    oai_harvest_daemon.call_bibupload(file_name, uploader_paremeters, oai_src_id=oai_source_id)
+    from .utils import call_bibupload
+    call_bibupload(file_name, uploader_paremeters, oai_src_id=oai_source_id)
     #command = CFG_BINDIR + "/bibupload " + uploader_paremeters + " "
     #command += file_name
 
@@ -1137,14 +1108,6 @@ def build_holdingpen_table(data, ln=CFG_SITE_LANG):
         result += oaiharvest_templates.tmpl_table_row_end()
     result += oaiharvest_templates.tmpl_table_end()
     return result
-
-
-def perform_request_viewholdingpen(ln=CFG_SITE_LANG, start=0, limit=-1):
-    data = get_holdingpen_entries(start, limit)
-    result = ""
-    result += build_holdingpen_table(data, ln)
-    return result
-
 
 def perform_request_viewhprecord(hpupdate_id, ln=CFG_SITE_LANG):
     _ = gettext_set_language(ln)
@@ -1276,7 +1239,8 @@ def perform_request_view_holdingpen_tree(filter_key):
 
 def get_oai_src(oai_src_id=''):
     """Returns a row parameters for a given id"""
-    sql = "SELECT id,name,baseurl,metadataprefix,frequency,bibconvertcfgfile,postprocess,setspecs,bibfilterprogram FROM oaiHARVEST"
+    sql = "SELECT id, name, baseurl, metadataprefix, bibconvertcfgfile, postprocess, setspecs, " \
+          "bibfilterprogram FROM oaiHARVEST"
     try:
         if oai_src_id:
             sql += " WHERE id=%s" % oai_src_id
@@ -1287,7 +1251,7 @@ def get_oai_src(oai_src_id=''):
         return ""
 
 
-def modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix, oai_src_frequency, oai_src_config,
+def modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix, oai_src_config,
                    oai_src_post, oai_src_sets=None, oai_src_bibfilter=''):
     """Modifies a row's parameters"""
     if oai_src_sets is None:
@@ -1298,7 +1262,6 @@ def modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix, oa
         run_sql("UPDATE oaiHARVEST SET name=%s WHERE id=%s", (oai_src_name, oai_src_id))
         run_sql("UPDATE oaiHARVEST SET baseurl=%s WHERE id=%s", (oai_src_baseurl, oai_src_id))
         run_sql("UPDATE oaiHARVEST SET metadataprefix=%s WHERE id=%s", (oai_src_prefix, oai_src_id))
-        run_sql("UPDATE oaiHARVEST SET frequency=%s WHERE id=%s", (oai_src_frequency, oai_src_id))
         run_sql("UPDATE oaiHARVEST SET bibconvertcfgfile=%s WHERE id=%s", (oai_src_config, oai_src_id))
         run_sql("UPDATE oaiHARVEST SET postprocess=%s WHERE id=%s", ('-'.join(oai_src_post), oai_src_id))
         run_sql("UPDATE oaiHARVEST SET setspecs=%s WHERE id=%s", (' '.join(oai_src_sets), oai_src_id))
@@ -1308,7 +1271,7 @@ def modify_oai_src(oai_src_id, oai_src_name, oai_src_baseurl, oai_src_prefix, oa
         return (0, e)
 
 
-def add_oai_src(oai_src_name, oai_src_baseurl, oai_src_prefix, oai_src_frequency, oai_src_lastrun, oai_src_config,
+def add_oai_src(oai_src_name, oai_src_baseurl, oai_src_prefix,  oai_src_lastrun, oai_src_config,
                 oai_src_post, oai_src_sets=None, oai_src_bibfilter=''):
     """Adds a new row to the database with the given parameters"""
     if oai_src_sets is None:
@@ -1320,8 +1283,8 @@ def add_oai_src(oai_src_name, oai_src_baseurl, oai_src_prefix, oai_src_frequency
             lastrun_mode = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             # lastrun_mode = "'"+lastrun_mode+"'"
         run_sql(
-            "INSERT INTO oaiHARVEST (id, baseurl, metadataprefix, arguments, comment,  bibconvertcfgfile,  name,  lastrun,  frequency,  postprocess,  bibfilterprogram,  setspecs) VALUES (0, %s, %s, NULL, NULL, %s, %s, %s, %s, %s, %s, %s)", \
-            (oai_src_baseurl, oai_src_prefix, oai_src_config, oai_src_name, lastrun_mode, oai_src_frequency,
+            "INSERT INTO oaiHARVEST (id, baseurl, metadataprefix, arguments, comment,  bibconvertcfgfile,  name,  lastrun,  postprocess,  bibfilterprogram,  setspecs) VALUES (0, %s, %s, NULL, NULL, %s, %s, %s, %s, %s, %s, %s)", \
+            (oai_src_baseurl, oai_src_prefix, oai_src_config, oai_src_name, lastrun_mode,
              '-'.join(oai_src_post), oai_src_bibfilter, " ".join(oai_src_sets)))
         return (1, "")
     except StandardError, e:
@@ -1351,7 +1314,7 @@ def get_update_status():
 
 def get_next_schedule():
     """Returns the next scheduled oaiharvestrun tasks"""
-    sql = "SELECT runtime,status FROM schTASK WHERE proc='oaiharvest' AND runtime > now() ORDER by runtime LIMIT 1"
+    sql = "SELECT runtime, status FROM schTASK WHERE proc='oaiharvest' AND runtime > now() ORDER by runtime LIMIT 1"
     res = run_sql(sql)
     if len(res) > 0:
         return res[0]
