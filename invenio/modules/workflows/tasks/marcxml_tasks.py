@@ -128,9 +128,10 @@ def convert_record_to_bibfield(obj, eng):
     """
     from invenio.legacy.bibfield import create_record
 
-    obj.extra_data["last_task_name"]  = "last task name: convert_record_to_bibfield"
+    obj.extra_data["last_task_name"] = "last task name: convert_record_to_bibfield"
+    print obj.data
     obj.data = create_record(obj.data).rec_json
-    obj.extra_data
+    print obj.data
     eng.log.info("Conversion succeed")
 
 
@@ -159,23 +160,21 @@ def get_repositories_list(repositories):
 
         obj.extra_data["last_task_name"] = "last task name: _get_repositories_list"
 
-        reposlist_temp = None
+        reposlist_temp = []
 
         if repositories:
             for reposname in repositories:
-                reposlist_temp = OaiHARVEST.get(OaiHARVEST.name == reposname).all()
+                reposlist_temp.append(OaiHARVEST.get(OaiHARVEST.name == reposname).one())
         else:
             reposlist_temp = OaiHARVEST.get(OaiHARVEST.name != "").all()
         true_repo_list = []
         for repo in reposlist_temp:
             true_repo_list.append(repo.to_dict())
 
-
         if true_repo_list:
             return true_repo_list
         else:
-            eng.halt()
-
+            eng.halt("No Repository named %s. Impossible to harvest non-existing things." % reposname)
 
     return _get_repositories_list
 
@@ -277,6 +276,7 @@ def get_files_list(path, parameter):
 
     return _get_files_list
 
+
 def get_extra_data(name):
     def _get_files_list(obj, eng):
         return obj.extra_data[name]
@@ -290,7 +290,6 @@ def convert_record(stylesheet="oaidc2marcxml.xsl"):
         """
         obj.extra_data["last_task_name"] = 'Convert Record'
         from invenio.legacy.bibconvert.xslt_engine import convert
-
 
         eng.log.info("Starting conversion using %s stylesheet" %
                      (stylesheet,))
@@ -329,7 +328,6 @@ def fulltext_download(obj, eng):
     Performs the fulltext download step.
     Only for arXiv
     """
-
 
     obj.extra_data["last_task_name"] = "full-text attachment step started"
     task_sleep_now_if_required()
