@@ -24,6 +24,8 @@ If started via CLI with --verb parameters, starts a manual single-shot
 harvesting. Otherwise starts a BibSched task for periodical harvesting
 of repositories defined in the OAI Harvest admin interface
 """
+
+
 __revision__ = "$Id$"
 
 import sys
@@ -32,6 +34,7 @@ import getpass
 import time
 import urlparse
 
+from sqlalchemy import orm
 from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
                             CFG_OAI_FAILED_HARVESTING_EMAILS_ADMIN,
                             CFG_SITE_SUPPORT_EMAIL
@@ -74,12 +77,28 @@ oaiharvest_templates = invenio.legacy.template.load('oaiharvest')
 
 def task_run_core():
     start_time = time.time()
-
-    workflow_name = task_get_option("workflow")
-
+    oaiharvest_instances = []
+    repository = task_get_option("repository")
+    if not repository:
+        workflow_name = task_get_option("workflow")
+    else:
+        if isinstance(repository, list):
+            for name_repository in repository:
+                oaiharvest_instances.append(OaiHARVEST.get(OaiHARVEST.name == name_repository).one().workflows)
+        else:
+            oaiharvest_instances.append(OaiHARVEST.get(OaiHARVEST.name == repository).one().workflows)
 
     try:
-        workflow = start(workflow_name, data=[123], stop_on_error=True, options=task_get_option(None))
+
+        if oaiharvest_instances:
+
+            for repository in oaiharvest_instances:
+                options = task_get_option(None)
+                options["name"] = repository
+                write_message(options)
+                workflow = start(repository, data=[123], stop_on_error=True, options=options)
+        else:
+            workflow = start(workflow_name, data=[123], stop_on_error=True, options=task_get_option(None))
 
     except WorkflowError as e:
 
@@ -402,13 +421,36 @@ def main():
             usage(1, "You can't specify twice -r or --workflow")
 
     if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
-        print OaiHARVEST.get(OaiHARVEST.name == reposname).all()
+        from invenio.modules.workflows.loader import load_workflows
+        available_workflows = load_workflows()
+
+
+        if "-r" in sys.argv:
+            position = sys.argv.index("-r")
+        else:
+            position = sys.argv.index("--repository")
+
+        repositories = sys.argv[position + 1].split(",")
+        if len(repositories) > 1 and ("-i" in sys.argv or "--identifier" in sys.argv):
+            usage(1, "It is impossible to harvest an identifier from several repositories.")
+
+        for name_repository in repositories:
+            try:
+                oaiharvest_instance = OaiHARVEST.get(OaiHARVEST.name == name_repository).one()
+            except orm.exc.NoResultFound:
+                usage(1, "The repository %s doesn't exist in our database." % name_repository)
+
+            if not oaiharvest_instance.workflows in available_workflows:
+                usage(1, "The repository %s doesn't have a valid workflow specified." % name_repository)
+
     elif num_of_critical_parameter == 1 and num_of_critical_parameterb == 1:
         print "FIXME"
 
     task_set_option("repository", None)
     task_set_option("dates", None)
     task_set_option("workflow", None)
+    task_set_option("workflow", None)
+
     task_set_option("identifiers", None)
     task_init(authorization_action='runoaiharvest',
               authorization_msg="oaiharvest Task Submission",

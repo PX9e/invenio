@@ -44,6 +44,7 @@ class OaiHARVEST(db.Model):
     arguments = db.Column(db.LargeBinary, nullable=True)
     comment = db.Column(db.Text, nullable=True)
     name = db.Column(db.String(255), nullable=False)
+    #repository = db.Column(db.String(255), nullable=False)
     lastrun = db.Column(db.DateTime, nullable=True)
     postprocess = db.Column(db.String(20), nullable=False,
                             server_default='h')

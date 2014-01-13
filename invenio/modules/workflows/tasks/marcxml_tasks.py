@@ -145,7 +145,7 @@ def init_harvesting(obj, eng):
         obj.extra_data["options"] = eng.extra_data["options"]
     except KeyError:
         eng.log.error("Non Critical Error: No options", "No options for this task have been found. It is possible"
-                                                        "that the fillowing task could failed or work not as expected")
+                                                        "that the following task could failed or work not as expected")
         obj.extra_data["options"] = {}
     eng.log.info("end of init_harvesting")
 
@@ -155,15 +155,16 @@ def get_repositories_list(repositories):
     Here we are retrieving the oaiharvest configuration for the task.
     It will allows in the future to do all the correct operations.
     """
-
     def _get_repositories_list(obj, eng):
 
         obj.extra_data["last_task_name"] = "last task name: _get_repositories_list"
+        repositories_to_harvest = repositories
 
         reposlist_temp = []
-
-        if repositories:
-            for reposname in repositories:
+        if obj.extra_data["options"]["repository"]:
+            repositories_to_harvest = obj.extra_data["options"]["repository"]
+        if repositories_to_harvest:
+            for reposname in repositories_to_harvest:
                 reposlist_temp.append(OaiHARVEST.get(OaiHARVEST.name == reposname).one())
         else:
             reposlist_temp = OaiHARVEST.get(OaiHARVEST.name != "").all()
@@ -186,6 +187,8 @@ def harvest_records(obj, eng):
     Return 1 in case of success and 0 in case of failure.
     """
     obj.extra_data["last_task_name"] = 'harvest_records'
+    eng.log.error(str(obj.data))
+    eng.log.error(str(obj.extra_data))
     harvested_identifier_list = []
 
     harvestpath = "%s_%d_%s_" % ("%s/oaiharvest_%s" % (CFG_TMPSHAREDDIR, eng.uuid),
