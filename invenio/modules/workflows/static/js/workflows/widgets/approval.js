@@ -98,11 +98,11 @@ function approveAll() {
     });
 };
 
-function mini_approval(decision, event, objectid){
+function mini_approval(decision, event, object_id){
     jQuery.ajax({
         type: "POST",
         url: url.resolve_widget,
-        data: {'objectid': objectid,
+        data: {'object_id': object_id,
                'widget': "approval_widget",
                'decision': decision},
         success: function(json){

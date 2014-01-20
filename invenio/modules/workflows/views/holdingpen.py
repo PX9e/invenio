@@ -179,7 +179,6 @@ def load_table(version_showing):
     VERSION_SHOWING = []
     req = request.get_json()
 
-    rebuild_containers = False
     if req:
         if req.get('final', None):
             VERSION_SHOWING.append(CFG_OBJECT_VERSION.FINAL)
@@ -187,7 +186,6 @@ def load_table(version_showing):
             VERSION_SHOWING.append(CFG_OBJECT_VERSION.HALTED)
         if req.get('running', None):
             VERSION_SHOWING.append(CFG_OBJECT_VERSION.RUNNING)
-        rebuild_containers = True
         current_app.config['VERSION_SHOWING'] = VERSION_SHOWING
         print "SET IT IN CONFIG as:", current_app.config['VERSION_SHOWING']
     else:
@@ -195,12 +193,11 @@ def load_table(version_showing):
             VERSION_SHOWING = current_app.config['VERSION_SHOWING']
             print "GOT IT HERE as:", VERSION_SHOWING
         except:
-            rebuild_containers = True
             print "HAD TO RESET"
             VERSION_SHOWING = [CFG_OBJECT_VERSION.HALTED]
 
     # sSearch will be used for searching later
-    a_search = request.args.get('sSearch')
+    a_search = request.args.get('sSearch', None)
     
     try:
         i_sortcol_0 = request.args.get('iSortCol_0')
@@ -209,17 +206,13 @@ def load_table(version_showing):
         i_display_length = int(request.args.get('iDisplayLength'))
         sEcho = int(request.args.get('sEcho')) + 1
     except:
-        i_sortcol_0 = current_app.config['iSortCol_0']
-        s_sortdir_0 = current_app.config['sSortDir_0']
-        i_display_start = current_app.config['iDisplayStart']
-        i_display_length = current_app.config['iDisplayLength']
-        sEcho = current_app.config['sEcho'] + 1
+        i_sortcol_0 = current_app.config.get('iSortCol_0', 0)
+        s_sortdir_0 = current_app.config.get('sSortDir_0', None)
+        i_display_start = current_app.config.get('iDisplayStart', 0)
+        i_display_length = current_app.config.get('iDisplayLength', 10)
+        sEcho = current_app.config.get('sEcho', 0) + 1
 
-    if a_search or rebuild_containers:
-        # FIXME: Temp measure until Redis is hooked up
-        print 'rebuilding containers'
-        print 'with version:', VERSION_SHOWING
-        bwolist = create_hp_containers(sSearch=a_search, version_showing=VERSION_SHOWING)
+    bwolist = create_hp_containers(sSearch=a_search, version_showing=VERSION_SHOWING)
 
     if 'iSortCol_0' in current_app.config:
         i_sortcol_0 = int(i_sortcol_0)
@@ -430,15 +423,15 @@ def show_widget(objectid):
 
 @blueprint.route('/resolve', methods=['GET', 'POST'])
 @login_required
-@wash_arguments({'bwobject_id': (unicode, '-1'),
+@wash_arguments({'object_id': (unicode, '-1'),
                  'widget': (unicode, 'default')})
-def resolve_widget(bwobject_id, widget):
+def resolve_widget(object_id, widget):
     """
     Resolves the action taken in a widget.
     Calls the run_widget function of the specific widget.
     """
     widget_form = widgets[widget]
-    widget_form().run_widget(bwobject_id, request)
+    widget_form().run_widget(object_id, request)
     return "Done"
 
 
