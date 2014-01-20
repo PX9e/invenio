@@ -109,8 +109,8 @@ def task_run_core():
         for log in workflowlog:
             write_message(log.message)
 
-        for i in e.payload["uuid_workflow_crashed"]:
-            write_message("____________Workflow " + i + " log output____________")
+        for i in e.payload:
+            write_message("\n\n____________Workflow " + i + " log output____________")
             workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == i) \
             .filter(BibWorkflowEngineLog.log_type == 40).all()
             for log in workflowlog:
