@@ -159,18 +159,10 @@ def wait_for_a_workflow_to_complete(obj, eng):
         if not to_wait:
             return None
         try:
-            to_wait.wait()
+            to_wait.get()
             eng.extra_data["nb_workflow_finish"] += 1
-
         except WorkflowError as e:
-            workflowlog = BibWorkflowEngineLog.query.filter(
-                BibWorkflowEngineLog.id_object == e.id_workflow
-            ).filter(BibWorkflowEngineLog.log_type == 40).all()
-            for log in workflowlog:
-                eng.log.error(log.message)
-            eng.log.error(e.id_workflow)
             eng.extra_data["uuid_workflow_crashed"].append(e.id_workflow)
-            eng.log.error(eng.extra_data["uuid_workflow_crashed"])
             eng.extra_data["nb_workflow_failed"] += 1
             eng.extra_data["nb_workflow_finish"] += 1
         except Exception as e:
@@ -266,7 +258,7 @@ def workflows_reviews(stop_if_error=False):
 
         if eng.extra_data["nb_workflow_failed"] and stop_if_error:
             raise WorkflowError("%s / %s failed" % (eng.extra_data["nb_workflow_failed"], eng.extra_data["nb_workflow"]),
-                                eng.uuid, obj.id, uuid_workflow_crashed=eng.extra_data["uuid_workflow_crashed"])
+                                eng.uuid, obj.id, payload=eng.extra_data["uuid_workflow_crashed"])
     return _workflows_reviews
 
 
