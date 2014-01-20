@@ -190,7 +190,6 @@ def convert_record_to_bibfield(obj, eng):
     thanks to BibField
     """
     from invenio.legacy.bibfield import create_record
-    eng.extra_data["bulbizar"] = obj.data["lol"]["tata"]
     obj.extra_data["last_task_name"] = "last task name: convert_record_to_bibfield"
     obj.data = create_record(obj.data).rec_json
     eng.log.info("Field conversion succeeded")
