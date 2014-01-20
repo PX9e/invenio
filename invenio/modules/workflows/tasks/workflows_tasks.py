@@ -263,8 +263,8 @@ def workflows_reviews(obj, eng):
     eng.log.info("%s / %s failed" % (eng.extra_data["nb_workflow_failed"], eng.extra_data["nb_workflow"]))
 
     if eng.extra_data["nb_workflow_failed"]:
-
-        raise Exception("%s / %s failed" % (eng.extra_data["nb_workflow_failed"], eng.extra_data["nb_workflow"]))
+        raise WorkflowError("%s / %s failed" % (eng.extra_data["nb_workflow_failed"], eng.extra_data["nb_workflow"]),
+                            eng.uuid, obj.id)
 
 
 def log_info(message):
