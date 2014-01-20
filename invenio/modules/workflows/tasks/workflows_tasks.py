@@ -47,7 +47,6 @@ def start_workflow(workflow_to_run="default", data=None, copy=True, **kwargs):
             myobject.data = data
         eng.log.info("Workflow object ready")
 
-        # FIXME currently hard-coded for expecting repository
         extra = myobject.get_extra_data()
         extra['source'] = obj.extra_data['repository']['name']
         myobject.set_extra_data(extra)

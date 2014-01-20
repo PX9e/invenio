@@ -119,7 +119,6 @@ approve_record.__description__ = "This task assigns the approval widget to a rec
 def inspire_filter_category(category_accepted=[], category_refused=[],
                             category_widgeted=[], widget=None):
     def _inspire_filter_category(obj, eng):
-
         category = None
         category_to_process = []
         action_to_take = [0, 0, 0]
@@ -157,9 +156,9 @@ def inspire_filter_category(category_accepted=[], category_refused=[],
                     if i.match(y):
                         action_to_take[2] += 1
 
-        sum = action_to_take[0] + action_to_take[1] + action_to_take[2]
+        sum_action = action_to_take[0] + action_to_take[1] + action_to_take[2]
 
-        if sum == 0:
+        if sum_action == 0:
             #We allow the * option which means at final case
             if '*' in category_accepted:
                 return None
@@ -171,12 +170,12 @@ def inspire_filter_category(category_accepted=[], category_refused=[],
                        "Human intervention needed")
                 eng.halt(msg, widget=widget)
         else:
-            if sum == action_to_take[0]:
+            if sum_action == action_to_take[0]:
                 eng.halt("Category filtering needs human intervention",
                          widget=widget)
-            elif sum == action_to_take[1]:
+            elif sum_action == action_to_take[1]:
                 return None
-            elif sum == action_to_take[2]:
+            elif sum_action == action_to_take[2]:
                 eng.stopProcessing()
             else:
                 eng.halt("Category filtering needs human intervention, rules are incoherent !!!",
@@ -191,10 +190,9 @@ def convert_record_to_bibfield(obj, eng):
     thanks to BibField
     """
     from invenio.legacy.bibfield import create_record
-
+    eng.extra_data["bulbizar"] = obj.data["lol"]["tata"]
     obj.extra_data["last_task_name"] = "last task name: convert_record_to_bibfield"
     obj.data = create_record(obj.data).rec_json
-    print obj.data
     eng.log.info("Field conversion succeeded")
 
 
