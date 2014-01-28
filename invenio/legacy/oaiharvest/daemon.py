@@ -25,7 +25,6 @@ harvesting. Otherwise starts a BibSched task for periodical harvesting
 of repositories defined in the OAI Harvest admin interface
 """
 
-
 __revision__ = "$Id$"
 
 import sys
@@ -40,8 +39,7 @@ from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
                             CFG_SITE_SUPPORT_EMAIL
                             )
 
-from invenio.modules.oai_harvest.models import  OaiHARVEST
-
+from invenio.modules.oai_harvest.models import OaiHARVEST
 
 from invenio.legacy.bibsched.bibtask import (task_get_task_param,
                                              task_get_option,
@@ -103,7 +101,7 @@ def task_run_core():
         write_message("ERROR HAPPEN")
         write_message("____________Workflow log output____________")
 
-        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == e.id_workflow)\
+        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == e.id_workflow) \
             .filter(BibWorkflowEngineLog.log_type == 40).all()
 
         for log in workflowlog:
@@ -112,14 +110,13 @@ def task_run_core():
         for i in e.payload:
             write_message("\n\n____________Workflow " + i + " log output____________")
             workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == i) \
-            .filter(BibWorkflowEngineLog.log_type == 40).all()
+                .filter(BibWorkflowEngineLog.log_type == 40).all()
             for log in workflowlog:
                 write_message(log.message)
 
-
         write_message("ERROR HAPPEN")
         write_message("____________Object log output____________")
-        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_object == e.id_object)\
+        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_object == e.id_object) \
             .filter(BibWorkflowEngineLog.log_type == 40).all()
         for log in objectlog:
             write_message(log.message)
@@ -310,7 +307,7 @@ def main():
                                     "user=",
                                     "password=",
                                     "workflow=",
-                                  ]
+                                   ]
         )
 
 
@@ -416,29 +413,41 @@ def main():
 
     num_of_critical_parameter = 0
     num_of_critical_parameterb = 0
-    i = 0
+
     reposname = None
+
+    from invenio.modules.workflows.loader import load_workflows
+    available_workflows = load_workflows()
+
     for opt in sys.argv[1:]:
-        if opt in "-r"or opt in "--repository":
+        if opt in "-r" or opt in "--repository":
             num_of_critical_parameter += 1
         elif opt in "--workflow":
             num_of_critical_parameterb += 1
         if num_of_critical_parameter > 1 or num_of_critical_parameterb > 1:
             usage(1, "You can't specify twice -r or --workflow")
 
-    if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
-        from invenio.modules.workflows.loader import load_workflows
-        available_workflows = load_workflows()
-
-
+    if num_of_critical_parameter == 1:
         if "-r" in sys.argv:
             position = sys.argv.index("-r")
         else:
             position = sys.argv.index("--repository")
-
         repositories = sys.argv[position + 1].split(",")
         if len(repositories) > 1 and ("-i" in sys.argv or "--identifier" in sys.argv):
             usage(1, "It is impossible to harvest an identifier from several repositories.")
+
+    if num_of_critical_parameterb == 1:
+
+        position = sys.argv.index("--workflow")
+        workflows = sys.argv[position + 1].split(",")
+
+        for workflow_candidate in workflows:
+            if not workflow_candidate in available_workflows:
+                usage(1, "The workflow %s doesn't exist." % workflow_candidate)
+
+
+
+    if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
 
         for name_repository in repositories:
             try:
@@ -450,13 +459,23 @@ def main():
                 usage(1, "The repository %s doesn't have a valid workflow specified." % name_repository)
 
     elif num_of_critical_parameter == 1 and num_of_critical_parameterb == 1:
-        print "FIXME"
+
+        for name_repository in repositories:
+            try:
+                OaiHARVEST.get(OaiHARVEST.name == name_repository).one()
+            except orm.exc.NoResultFound:
+                usage(1, "The repository %s doesn't exist in our database." % name_repository)
+
+        print "A workflow has been specified, overriding the repository one."
+
+
+
+    elif num_of_critical_parameter == 0 and num_of_critical_parameterb == 1:
+        o=0
 
     task_set_option("repository", None)
     task_set_option("dates", None)
     task_set_option("workflow", None)
-    task_set_option("workflow", None)
-
     task_set_option("identifiers", None)
     task_init(authorization_action='runoaiharvest',
               authorization_msg="oaiharvest Task Submission",

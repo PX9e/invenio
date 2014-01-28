@@ -119,7 +119,6 @@ approve_record.__description__ = "This task assigns the approval widget to a rec
 def inspire_filter_category(category_accepted=[], category_refused=[],
                             category_widgeted=[], widget=None):
     def _inspire_filter_category(obj, eng):
-        category = None
         category_to_process = []
         action_to_take = [0, 0, 0]
         try:
@@ -719,6 +718,7 @@ def upload_step(obj, eng):
 
     new_dict_representation = Record(obj.data)
     marcxml_value = new_dict_representation.legacy_export_as_marc()
+    eng.log.error(str(marcxml_value))
     task_id = None
     # Get a random sequence ID that will allow for the tasks to be
     # run in order, regardless if parallel task execution is activated
