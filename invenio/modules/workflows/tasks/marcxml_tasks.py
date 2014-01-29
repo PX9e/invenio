@@ -220,6 +220,7 @@ def get_repositories_list(repositories):
         repositories_to_harvest = repositories
 
         reposlist_temp = []
+        eng.log.info(str(obj.extra_data["options"]))
         if obj.extra_data["options"]["repository"]:
             repositories_to_harvest = obj.extra_data["options"]["repository"]
         if repositories_to_harvest:
@@ -715,7 +716,6 @@ def upload_step(obj, eng):
     #
     #Prepare in case of filtering the files to up,
     #no filtering, no other things to do
-
     new_dict_representation = Record(obj.data)
     marcxml_value = new_dict_representation.legacy_export_as_marc()
     eng.log.error(str(marcxml_value))
