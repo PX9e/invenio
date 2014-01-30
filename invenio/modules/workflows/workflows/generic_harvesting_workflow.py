@@ -35,7 +35,6 @@ from ..tasks.logic_tasks import (foreach,
                                  end_for
                                  )
 
-
 from ..tasks.bibsched_tasks import write_something_bibsched
 
 from invenio.base.config import CFG_TMPSHAREDDIR
@@ -46,10 +45,8 @@ from ..models import DATA_TYPES
 class generic_harvesting_workflow(object):
     object_type = DATA_TYPES.HARVEST
     workflow = [init_harvesting,
-                write_something_bibsched("starting"),
-                foreach(get_repositories_list(['arxiv']), "repository"),
+                foreach(get_repositories_list(['arxivb']), "repository"),
                 [
-                    write_something_bibsched("harvesting"),
                     harvest_records,
                     foreach(get_files_list(CFG_TMPSHAREDDIR, get_eng_uuid_harvested)),
                     [
@@ -63,9 +60,7 @@ class generic_harvesting_workflow(object):
                     end_for
                 ],
                 end_for,
-                write_something_bibsched("waiting workflows"),
                 wait_for_workflows_to_complete,
-                write_something_bibsched("the end"),
-                workflows_reviews()
+                workflows_reviews,
     ]
 

@@ -42,7 +42,8 @@ class full_doc_process(object):
                 [
                     plot_extract(["latex"]),
                     fulltext_download,
-                    inspire_filter_category(category_widgeted=[], category_accepted=["*"], widget="approval_widget"),
+                    inspire_filter_category(category_widgeted_param=[], category_accepted_param=["*"],
+                                            widget_param="approval_widget"),
                     # bibclassify(taxonomy="/home/jlavik/envs/pu/src/invenio/HEP.rdf",
                     #             output_mode="dict"),
                     bibclassify(taxonomy="/home/jlavik/envs/pu/src/invenio/HEP.rdf",

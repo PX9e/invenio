@@ -81,10 +81,13 @@ def task_run_core():
     error_happened_p = False
     if not repository:
         workflow_option = task_get_option("workflow")
+
         if isinstance(workflow_option, list):
-                for name in workflow_option:
-                    if name not in list_of_workflow_without_repository:
-                        list_of_workflow_without_repository.append(name)
+            for name in workflow_option:
+                if name not in list_of_workflow_without_repository:
+
+                    list_of_workflow_without_repository.append(name)
+
         else:
             list_of_workflow_without_repository.append(workflow_option)
     else:
@@ -102,7 +105,6 @@ def task_run_core():
         elif isinstance(repository, list):
 
             for name_repository in repository:
-
                 name_workflow = OaiHARVEST.get(OaiHARVEST.name == name_repository).one().workflows
                 if name_workflow not in list_of_repository_per_workflow:
                     list_of_repository_per_workflow[name_workflow] = [name_repository]
@@ -121,6 +123,12 @@ def task_run_core():
             for workflow_to_launch in list_of_workflow_without_repository:
                 workflow = start(workflow_to_launch, data=[""], stop_on_error=True, options=task_get_option(None))
 
+        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == workflow.uuid).all()
+
+        for log in workflowlog:
+            write_message(log.message)
+        execution_time = round(time.time() - start_time, 2)
+        write_message("Execution time :" + str(execution_time))
     except WorkflowError as e:
         error_happened_p = True
         write_message("ERROR HAPPEN")
@@ -148,13 +156,6 @@ def task_run_core():
         execution_time = round(time.time() - start_time, 2)
 
         write_message("Execution time :" + str(execution_time))
-
-    workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == workflow.uuid).all()
-
-    for log in workflowlog:
-        write_message(log.message)
-    execution_time = round(time.time() - start_time, 2)
-    write_message("Execution time :" + str(execution_time))
 
     # Generate reports
     ticket_queue = task_get_option("create-ticket-in")

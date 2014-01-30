@@ -116,9 +116,28 @@ approve_record.__title__ = "Record Approval"
 approve_record.__description__ = "This task assigns the approval widget to a record."
 
 
-def inspire_filter_category(category_accepted=[], category_refused=[],
-                            category_widgeted=[], widget=None):
+
+
+def inspire_filter_category(category_accepted_param=[], category_refused_param=[],
+                            category_widgeted_param=[], widget_param=None):
     def _inspire_filter_category(obj, eng):
+        try:
+            category_accepted = obj.extra_data["repository"]["arguments"]["filtering"]['category_accepted']
+        except KeyError:
+            category_accepted = category_accepted_param
+        try:
+            category_refused = obj.extra_data["repository"]["arguments"]["filtering"]['category_refused']
+        except KeyError:
+            category_refused = category_refused_param
+        try:
+            category_widgeted = obj.extra_data["repository"]["arguments"]["filtering"]['category_widgeted']
+        except KeyError:
+            category_widgeted = category_widgeted_param
+        try:
+            widget = obj.extra_data["repository"]["arguments"]["filtering"]['widget']
+        except KeyError:
+            widget = widget_param
+
         category_to_process = []
         action_to_take = [0, 0, 0]
         try:
@@ -136,21 +155,21 @@ def inspire_filter_category(category_accepted=[], category_refused=[],
 
         for i in category_widgeted:
             if i != '*':
-                i = re.compile('^' + i + '.*')
+                i = re.compile('^' + re.escape(i) + '.*')
                 for y in category_to_process:
                     if i.match(y):
                         action_to_take[0] += 1
 
         for i in category_accepted:
             if i != '*':
-                i = re.compile('^' + i + '.*')
+                i = re.compile('^' + re.escape(i) + '.*')
                 for y in category_to_process:
                     if i.match(y):
                         action_to_take[1] += 1
 
         for i in category_refused:
             if i != '*':
-                i = re.compile('^' + i + '.*')
+                i = re.compile('^' + re.escape(i) + '.*')
                 for y in category_to_process:
                     if i.match(y):
                         action_to_take[2] += 1
@@ -185,7 +204,7 @@ def inspire_filter_category(category_accepted=[], category_refused=[],
 
 def convert_record_to_bibfield(obj, eng):
     """
-    Convert a record in data into a 'dictionary'
+    Convert a record in data log.errorinto a 'dictionary'
     thanks to BibField
     """
     obj.extra_data["last_task_name"] = "last task name: convert_record_to_bibfield"
@@ -225,7 +244,10 @@ def get_repositories_list(repositories):
             repositories_to_harvest = obj.extra_data["options"]["repository"]
         if repositories_to_harvest:
             for reposname in repositories_to_harvest:
-                reposlist_temp.append(OaiHARVEST.get(OaiHARVEST.name == reposname).one())
+                try:
+                    reposlist_temp.append(OaiHARVEST.get(OaiHARVEST.name == reposname).one())
+                except:
+                    eng.log.error("CRITICAL: repository %s doesn't exit into our database", reposname)
         else:
             reposlist_temp = OaiHARVEST.get(OaiHARVEST.name != "").all()
         true_repo_list = []
@@ -511,7 +533,16 @@ def plot_extract(plotextractor_types):
         task_sleep_now_if_required()
         if "result" not in obj.extra_data:
             obj.extra_data["result"] = {}
-        if 'latex' in plotextractor_types:
+
+        if not 'p_extraction-source' in obj.extra_data["repository"]["arguments"]:
+            p_extraction_source = plotextractor_types
+        else:
+            p_extraction_source = obj.extra_data["repository"]["arguments"]['p_extraction-source']
+
+        if not isinstance(p_extraction_source, list):
+            p_extraction_source = [p_extraction_source]
+
+        if 'latex' in p_extraction_source:
             # Run LaTeX plotextractor
             if "tarball" not in obj.extra_data["result"]:
                 # turn oaiharvest_23_1_20110214161632_converted -> oaiharvest_23_1_material
@@ -563,7 +594,7 @@ def plot_extract(plotextractor_types):
                 extracted_image_data = remove_dups(extracted_image_data)
                 create_contextfiles(extracted_image_data)
                 marc_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<collection>\n'
-                marc_xml = marc_xml + create_MARC(extracted_image_data, tarball, None)
+                marc_xml += create_MARC(extracted_image_data, tarball, None)
                 marc_xml += "\n</collection>"
 
                 if marc_xml:
@@ -718,7 +749,6 @@ def upload_step(obj, eng):
     #no filtering, no other things to do
     new_dict_representation = Record(obj.data)
     marcxml_value = new_dict_representation.legacy_export_as_marc()
-    eng.log.error(str(marcxml_value))
     task_id = None
     # Get a random sequence ID that will allow for the tasks to be
     # run in order, regardless if parallel task execution is activated
@@ -780,8 +810,6 @@ def bibclassify(taxonomy, rebuild_cache=False, no_cache=False, output_mode='text
             obj.extra_data["result"] = {}
 
         if "pdf" in obj.extra_data["result"]:
-            eng.log.error(str(obj.extra_data["result"]["pdf"]))
-            eng.log.error(str(taxonomy))
             obj.extra_data["result"]["bibclassify"] = api.bibclassify_exhaustive_call(obj.extra_data["result"]["pdf"],
                                                                                       taxonomy, rebuild_cache, no_cache,
                                                                                       output_mode, output_limit, spires,

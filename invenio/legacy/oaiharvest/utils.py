@@ -428,6 +428,7 @@ def harvest_step(repository, harvestpath, identifiers, dates):
     if identifiers:
         # Harvesting is done per identifier instead of server-updates
         harvested_files_list = harvest_by_identifiers(repository, identifiers, harvestpath)
+
     elif dates:
         # Dates are given so we harvest "from" -> "to" dates
         harvested_files_list = harvest_by_dates(repository,
@@ -437,7 +438,6 @@ def harvest_step(repository, harvestpath, identifiers, dates):
     elif not dates and (repository["lastrun"] is None or repository["lastrun"] == ''):
         # First time we harvest from this repository
         harvested_files_list = harvest_by_dates(repository, harvestpath)
-        update_lastrun(repository["id"])
 
     elif not dates:
         # Just a regular update from last time it ran
@@ -449,7 +449,6 @@ def harvest_step(repository, harvestpath, identifiers, dates):
                                                 fromdate=fromdate)
         from invenio.legacy.bibsched.bibtask import write_message
 
-        write_message(update_lastrun(repository["id"]))
 
     return harvested_files_list
 
@@ -464,9 +463,7 @@ def harvest_by_identifiers(repository, identifiers, harvestpath):
     The records will be harvested into the specified filepath.
     """
     harvested_files_list = []
-    count = 0
     for oai_identifier in identifiers:
-        count += 1
         harvested_files_list.extend(oai_harvest_get(prefix=repository["metadataprefix"],
                                                     baseurl=repository["baseurl"],
                                                     harvestpath=harvestpath,
