@@ -21,7 +21,8 @@ from ..tasks.marcxml_tasks import (get_repositories_list,
                                    init_harvesting,
                                    harvest_records,
                                    get_extra_data,
-                                   get_records_from_file
+                                   get_records_from_file,
+                                   update_last_update
                                    )
 
 from ..tasks.workflows_tasks import (start_workflow,
@@ -37,14 +38,12 @@ from ..tasks.logic_tasks import (foreach,
                                  simple_for
                                  )
 
-
-
 from invenio.legacy.bibsched.bibtask import task_update_progress, write_message
 
 
 class generic_harvesting_workflow_with_bibsched(object):
     repository = 'arXivb'
-    workflow = [write_something_generic("Initialisation",[task_update_progress, write_message]),
+    workflow = [write_something_generic("Initialisation", [task_update_progress, write_message]),
                 init_harvesting,
                 write_something_generic("Starting", [task_update_progress, write_message]),
                 foreach(get_repositories_list([repository]), "repository"),
@@ -76,6 +75,7 @@ class generic_harvesting_workflow_with_bibsched(object):
                 ],
                 end_for,
                 write_something_generic("Finishing", [task_update_progress, write_message]),
-                workflows_reviews(stop_if_error=True)
+                workflows_reviews(stop_if_error=True),
+                update_last_update(get_repositories_list())
     ]
 

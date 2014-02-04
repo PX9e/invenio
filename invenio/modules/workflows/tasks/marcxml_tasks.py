@@ -28,10 +28,8 @@ from invenio.legacy.bibupload.engine import (find_record_from_recid,
                                              find_record_from_oaiid,
                                              find_record_from_doi
                                              )
-from invenio.legacy.oaiharvest.dblayer import create_oaiharvest_log_str
-
+from invenio.legacy.oaiharvest.dblayer import update_lastrun, create_oaiharvest_log_str
 from invenio.base.config import (CFG_TMPSHAREDDIR,
-                                 CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT,
                                  CFG_TMPDIR,
                                  CFG_INSPIRE_SITE)
 from invenio.legacy.oaiharvest.utils import (record_extraction_from_file,
@@ -114,8 +112,6 @@ def approve_record(obj, eng):
 
 approve_record.__title__ = "Record Approval"
 approve_record.__description__ = "This task assigns the approval widget to a record."
-
-
 
 
 def inspire_filter_category(category_accepted_param=[], category_refused_param=[],
@@ -227,7 +223,7 @@ def init_harvesting(obj, eng):
     eng.log.info("end of init_harvesting")
 
 
-def get_repositories_list(repositories):
+def get_repositories_list(repositories=[]):
     """
     Here we are retrieving the oaiharvest configuration for the task.
     It will allows in the future to do all the correct operations.
@@ -239,7 +235,6 @@ def get_repositories_list(repositories):
         repositories_to_harvest = repositories
 
         reposlist_temp = []
-        eng.log.info(str(obj.extra_data["options"]))
         if obj.extra_data["options"]["repository"]:
             repositories_to_harvest = obj.extra_data["options"]["repository"]
         if repositories_to_harvest:
@@ -294,15 +289,13 @@ def harvest_records(obj, eng):
     # Harvest phase
 
     try:
-        harvested_files_list = harvest_step(obj.data,
-                                            harvestpath,
-                                            obj.extra_data["options"]["identifiers"],
-                                            obj.extra_data["options"]["dates"])
-    except Exception:
+        harvested_files_list = harvest_step(obj,
+                                            harvestpath)
+    except Exception as e:
         eng.log.error("Error while harvesting %s. Skipping." % (obj.data,))
 
-        raise WorkflowError("Error while harvesting %r. Skipping." % (obj.data,),
-                            id_workflow=eng.uuid)
+        raise WorkflowError("Error while harvesting %r. Skipping : %s." % (obj.data, repr(e)),
+                            id_workflow=eng.uuid, id_object=obj.id)
 
     if len(harvested_files_list) == 0:
         eng.log.info("No records harvested for %s" % (obj.data["name"],))
@@ -312,12 +305,10 @@ def harvest_records(obj, eng):
 
     if len(harvested_files_list) != len(harvested_identifier_list[0]):
         # Harvested files and its identifiers are 'out of sync', abort harvest
-        msg = "Harvested files miss identifiers for %s" % (arguments,)
-        eng.log.info(msg)
-        raise WorkflowError(msg, id_workflow=eng.uuid)
+
+        raise WorkflowError("Harvested files miss identifiers for %s" % (arguments,), id_workflow=eng.uuid)
     obj.extra_data['harvested_files_list'] = harvested_files_list
-    eng.log.info("%d files harvested and processed" % (len(harvested_files_list),))
-    eng.log.info("End harvest records task")
+    eng.log.info("%d files harvested and processed \n End harvest records task" % (len(harvested_files_list),))
 
 
 harvest_records.__id__ = "h"
@@ -357,7 +348,10 @@ def get_files_list(path, parameter):
     def _get_files_list(obj, eng):
         obj.extra_data["last_task_name"] = "last task name: get_files_list"
         if callable(parameter):
-            unknown = parameter(obj, eng)
+            unknown = parameter
+            while callable(unknown):
+                unknown = unknown(obj, eng)
+
         else:
             unknown = parameter
         result = glob.glob1(path, unknown)
@@ -392,9 +386,8 @@ def convert_record(stylesheet="oaidc2marcxml.xsl"):
             msg = "Could not convert record: %s\n%s" % \
                   (str(e), traceback.format_exc())
             obj.extra_data["error_msg"] = msg
-            eng.log.error("Error: %s" % (msg,))
             raise WorkflowError("Error: %s" % (msg,),
-                                id_workflow=eng.uuid)
+                                id_workflow=eng.uuid, id_object=obj.id)
 
     return _convert_record
 
@@ -421,6 +414,26 @@ def convert_record_with_repository(stylesheet="oaidc2marcxml.xsl"):
     return _convert_record
 
 
+def update_last_update(repository_list):
+    def _update_last_update(obj, eng):
+        try:
+            if obj.extra_data["_should_last_run_be_update"]:
+                repository_list_to_process = repository_list
+                if not isinstance(repository_list_to_process, list):
+                    if callable(repository_list_to_process):
+                        while callable(repository_list_to_process):
+                            repository_list_to_process = repository_list_to_process(obj, eng)
+                    else:
+                        repository_list_to_process = [repository_list_to_process]
+                for repository in repository_list_to_process:
+                    update_lastrun(repository["id"])
+
+        except KeyError:
+            pass
+
+    return _update_last_update
+
+
 def fulltext_download(obj, eng):
     """
     Performs the fulltext download step.
@@ -434,7 +447,6 @@ def fulltext_download(obj, eng):
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_number_external"]["value"],
                                       extract_path, ["pdf"])
-        time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         arguments = obj.extra_data["repository"]["arguments"]
         try:
             if not arguments['t_doctype'] == '':
@@ -446,7 +458,6 @@ def fulltext_download(obj, eng):
                           "You didn't specified t_doctype in argument for fulltext_download,"
                           "try to recover by using the default one!")
             doctype = 'arXiv'
-
         if pdf:
             obj.extra_data["result"]["pdf"] = pdf
             fulltext_xml = ("  <datafield tag=\"FFT\" ind1=\" \" ind2=\" \">\n"
@@ -485,8 +496,8 @@ def quick_match_record(obj, eng):
 
     my_json_reader = Record(obj.data)
     try:
+        #identifiers = my_json_reader.
         identifiers = {}
-        #identifiers = my_json_reader.get_persistent_identifiers()
     except KeyError:
         identifiers = {}
 
@@ -550,8 +561,6 @@ def plot_extract(plotextractor_types):
                 extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
                 tarball, pdf = harvest_single(obj.data["system_number_external"]["value"], extract_path, ["tarball"])
                 tarball = str(tarball)
-                time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
-
                 if tarball is None:
                     raise WorkflowError(str("Error harvesting tarball from id: %s %s" %
                                             (obj.data["system_number_external"]["value"], extract_path)),
@@ -624,26 +633,22 @@ def refextract(obj, eng):
     if "pdf" not in obj.extra_data["result"]:
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_number_external"]["value"], extract_path, ["pdf"])
-        time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
+
         if pdf is not None:
             obj.extra_data["result"]["pdf"] = pdf
 
     elif not os.path.isfile(obj.extra_data["result"]["pdf"]):
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_number_external"]["value"], extract_path, ["pdf"])
-        time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         if pdf is not None:
             obj.extra_data["result"]["pdf"] = pdf
 
     if os.path.isfile(obj.extra_data["result"]["pdf"]):
-
         cmd_stdout = extract_references_from_file_xml(obj.extra_data["result"]["pdf"])
         references_xml = REGEXP_REFS.search(cmd_stdout)
-
         if references_xml:
             updated_xml = '<?xml version="1.0" encoding="UTF-8"?>\n<collection>\n<record>' + references_xml.group(1) + \
                           "</record>\n</collection>"
-
             new_dict_representation = create_record(updated_xml, master_format="marc").dumps()
             try:
                 obj.data['reference'].append(new_dict_representation["reference"])
@@ -670,7 +675,6 @@ def author_list(obj, eng):
         extract_path = make_single_directory(CFG_TMPSHAREDDIR, eng.uuid)
         tarball, pdf = harvest_single(obj.data["system_number_external"]["value"], extract_path, ["tarball"])
         tarball = str(tarball)
-        time.sleep(CFG_PLOTEXTRACTOR_DOWNLOAD_TIMEOUT)
         if tarball is None:
             raise WorkflowError(str("Error harvesting tarball from id: %s %s" % (identifiers, extract_path)),
                                 eng.uuid)
@@ -819,5 +823,6 @@ def bibclassify(taxonomy, rebuild_cache=False, no_cache=False, output_mode='text
             obj.add_task_result("bibclassify", obj.extra_data["result"]["bibclassify"])
         else:
             obj.log.error("No classification done due to missing fulltext."
-                          "\n You need to get it before! see fulltext task")
+                          "\n You need to get it before! See fulltext task")
+
     return _bibclassify

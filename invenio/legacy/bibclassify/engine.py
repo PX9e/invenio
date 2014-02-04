@@ -173,7 +173,7 @@ def get_keywords_from_text(text_lines, taxonomy_name, output_mode="text",
             (single_keywords, composite_keywords, author_keywords, acronyms)
             for other output modes it returns formatted string
     """
-
+    starttime = time.time()
     cache = reader.get_cache(taxonomy_name)
     if not cache:
         reader.set_cache(taxonomy_name, reader.get_regular_expressions(taxonomy_name,
@@ -193,11 +193,11 @@ def get_keywords_from_text(text_lines, taxonomy_name, output_mode="text",
     if extract_acronyms:
         acronyms = extract_abbreviations(fulltext)
 
-    starttime = time.time()
+
 
     single_keywords = extract_single_keywords(_skw, fulltext)
     composite_keywords = extract_composite_keywords(_ckw, fulltext, single_keywords)
-    print time.time() - starttime
+
 
     if only_core_tags:
         single_keywords = clean_before_output(_filter_core_keywors(single_keywords))
@@ -205,6 +205,7 @@ def get_keywords_from_text(text_lines, taxonomy_name, output_mode="text",
     else:
         # Filter out the "nonstandalone" keywords
         single_keywords = clean_before_output(single_keywords)
+    print time.time() - starttime
     return get_keywords_output(single_keywords, composite_keywords, taxonomy_name,
                                author_keywords, acronyms, output_mode, output_limit,
                                spires, only_core_tags)

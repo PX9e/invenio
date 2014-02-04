@@ -58,6 +58,7 @@ def get_single_keywords(skw_db, fulltext):
             for match in regex.finditer(fulltext):
                 # Modify the right index to put it on the last letter
                 # of the word.
+
                 span = (match.span()[0], match.span()[1] - 1)
 
                 # FIXME: expensive!!!
