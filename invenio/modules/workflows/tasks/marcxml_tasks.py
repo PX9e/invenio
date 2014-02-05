@@ -416,7 +416,7 @@ def convert_record_with_repository(stylesheet="oaidc2marcxml.xsl"):
 
 def update_last_update(repository_list):
     def _update_last_update(obj, eng):
-        try:
+        if "_should_last_run_be_update" in obj.extra_data:
             if obj.extra_data["_should_last_run_be_update"]:
                 repository_list_to_process = repository_list
                 if not isinstance(repository_list_to_process, list):
@@ -428,8 +428,6 @@ def update_last_update(repository_list):
                 for repository in repository_list_to_process:
                     update_lastrun(repository["id"])
 
-        except KeyError:
-            pass
 
     return _update_last_update
 
@@ -808,6 +806,12 @@ def bibclassify(taxonomy, rebuild_cache=False, no_cache=False, output_mode='text
                 output_limit=20, spires=False, match_mode='full', with_author_keywords=False,
                 extract_acronyms=False, only_core_tags=False):
     def _bibclassify(obj, eng):
+        import os.path
+
+        if not os.path.isfile(taxonomy):
+            eng.log.error("No RDF found, no bibclassify can run")
+            return None
+
         from invenio.legacy.bibclassify import api
 
         if "result" not in obj.extra_data:
