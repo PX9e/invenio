@@ -341,7 +341,7 @@ def harvest_step(obj, harvestpath):
     """
     if obj.extra_data["options"]["identifiers"]:
         # Harvesting is done per identifier instead of server-updates
-        return harvest_by_identifiers(obj.data, harvestpath)
+        return harvest_by_identifiers(obj, harvestpath)
     else:
         return harvest_by_dates(obj, harvestpath)
 

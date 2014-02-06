@@ -114,6 +114,34 @@ approve_record.__title__ = "Record Approval"
 approve_record.__description__ = "This task assigns the approval widget to a record."
 
 
+
+def filtering_oai_pmh_identifier(obj, eng):
+
+    if not "_function_reserved" in eng.extra_data:
+        eng.extra_data["_function_reserved"] = {}
+    if not "identifiers" in eng.extra_data["_function_reserved"]:
+        eng.extra_data["_function_reserved"]["identifiers"]= []
+    try:
+        if not isinstance(obj.data, list):
+            obj_data_list = [obj.data]
+        else:
+            obj_data_list = obj.data
+        for record in obj_data_list:
+
+            substring = record[record.index("<identifier>") + 12:record.index("</identifier>")]
+            if substring in eng.extra_data["_function_reserved"]["identifiers"]:
+                return False
+            else:
+                eng.extra_data["_function_reserved"]["identifiers"].append(substring)
+                return True
+    except TypeError:
+        eng.log.error("object data type invalid. Ignoring this step!")
+        return True
+
+
+
+
+
 def inspire_filter_category(category_accepted_param=[], category_refused_param=[],
                             category_widgeted_param=[], widget_param=None):
     def _inspire_filter_category(obj, eng):

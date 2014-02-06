@@ -22,7 +22,8 @@ from ..tasks.marcxml_tasks import (get_repositories_list,
                                    harvest_records,
                                    get_extra_data,
                                    get_records_from_file,
-                                   update_last_update
+                                   update_last_update,
+                                   filtering_oai_pmh_identifier
                                    )
 
 from ..tasks.workflows_tasks import (start_workflow,
@@ -35,8 +36,8 @@ from ..tasks.workflows_tasks import (start_workflow,
 
 from ..tasks.logic_tasks import (foreach,
                                  end_for,
-                                 simple_for
-                                 )
+                                 simple_for,
+                                 workflow_if)
 
 
 from invenio.legacy.bibsched.bibtask import task_update_progress, write_message
@@ -57,9 +58,13 @@ class generic_harvesting_workflow_with_bibsched(object):
                         write_something_generic("Creating Workflows", [task_update_progress, write_message]),
                         foreach(get_records_from_file()),
                         [
-                            start_workflow("full_doc_process", None),
-                            write_something_generic(["Workflow started : ", get_nb_workflow_created, " "],
-                                                    [task_update_progress, write_message]),
+                            workflow_if(filtering_oai_pmh_identifier),
+                            [
+                                write_something_generic(get_records_from_file(), write_message),
+                                start_workflow("full_doc_process", None),
+                                write_something_generic(["Workflow started : ", get_nb_workflow_created, " "],
+                                                        [task_update_progress, write_message]),
+                            ],
                         ],
                         end_for
                     ],
