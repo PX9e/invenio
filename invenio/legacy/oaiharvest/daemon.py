@@ -25,7 +25,6 @@ harvesting. Otherwise starts a BibSched task for periodical harvesting
 of repositories defined in the OAI Harvest admin interface
 """
 
-
 __revision__ = "$Id$"
 
 import sys
@@ -40,8 +39,7 @@ from invenio.config import (CFG_OAI_FAILED_HARVESTING_STOP_QUEUE,
                             CFG_SITE_SUPPORT_EMAIL
                             )
 
-from invenio.modules.oai_harvest.models import  OaiHARVEST
-
+from invenio.modules.oai_harvest.models import OaiHARVEST
 
 from invenio.legacy.bibsched.bibtask import (task_get_task_param,
                                              task_get_option,
@@ -77,33 +75,66 @@ oaiharvest_templates = invenio.legacy.template.load('oaiharvest')
 
 def task_run_core():
     start_time = time.time()
-    oaiharvest_instances = []
+    list_of_workflow_without_repository = []
+    list_of_repository_per_workflow = {}
     repository = task_get_option("repository")
-
+    error_happened_p = False
     if not repository:
-        workflow_name = task_get_option("workflow")
+        workflow_option = task_get_option("workflow")
+
+        if isinstance(workflow_option, list):
+            for name in workflow_option:
+                if name not in list_of_workflow_without_repository:
+
+                    list_of_workflow_without_repository.append(name)
+
+        else:
+            list_of_workflow_without_repository.append(workflow_option)
     else:
         if task_get_option("workflow"):
-            oaiharvest_instances.append(task_get_option("workflow"))
+
+            workflow_option = task_get_option("workflow")
+            if isinstance(workflow_option, list):
+                for name in workflow_option:
+                    if name not in list_of_repository_per_workflow:
+                        list_of_repository_per_workflow[name] = repository
+
+            else:
+                list_of_repository_per_workflow[workflow_option] = repository
+
         elif isinstance(repository, list):
+
             for name_repository in repository:
-                oaiharvest_instances.append(OaiHARVEST.get(OaiHARVEST.name == name_repository).one().workflows)
+                name_workflow = OaiHARVEST.get(OaiHARVEST.name == name_repository).one().workflows
+                if name_workflow not in list_of_repository_per_workflow:
+                    list_of_repository_per_workflow[name_workflow] = [name_repository]
+                else:
+                    list_of_repository_per_workflow[name_workflow].append(name_repository)
+
         else:
-            oaiharvest_instances.append(OaiHARVEST.get(OaiHARVEST.name == repository).one().workflows)
+            list_of_repository_per_workflow[OaiHARVEST.get(OaiHARVEST.name == repository).one().workflows] = repository
     try:
-        if oaiharvest_instances:
-            for workflow_to_launch in oaiharvest_instances:
+        if list_of_repository_per_workflow:
+            for workflow_to_launch in list_of_repository_per_workflow:
                 options = task_get_option(None)
+                options["repository"] = list_of_repository_per_workflow[workflow_to_launch]
                 workflow = start(workflow_to_launch, data=[""], stop_on_error=True, options=options)
         else:
-            workflow = start(workflow_name, data=[""], stop_on_error=True, options=task_get_option(None))
+            for workflow_to_launch in list_of_workflow_without_repository:
+                workflow = start(workflow_to_launch, data=[""], stop_on_error=True, options=task_get_option(None))
 
+        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == workflow.uuid).all()
+
+        for log in workflowlog:
+            write_message(log.message)
+        execution_time = round(time.time() - start_time, 2)
+        write_message("Execution time :" + str(execution_time))
     except WorkflowError as e:
-
+        error_happened_p = True
         write_message("ERROR HAPPEN")
         write_message("____________Workflow log output____________")
 
-        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == e.id_workflow)\
+        workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == e.id_workflow) \
             .filter(BibWorkflowEngineLog.log_type == 40).all()
 
         for log in workflowlog:
@@ -112,14 +143,13 @@ def task_run_core():
         for i in e.payload:
             write_message("\n\n____________Workflow " + i + " log output____________")
             workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == i) \
-            .filter(BibWorkflowEngineLog.log_type == 40).all()
+                .filter(BibWorkflowEngineLog.log_type == 40).all()
             for log in workflowlog:
                 write_message(log.message)
 
-
         write_message("ERROR HAPPEN")
         write_message("____________Object log output____________")
-        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_object == e.id_object)\
+        objectlog = BibWorkflowObjectLog.query.filter(BibWorkflowObjectLog.id_object == e.id_object) \
             .filter(BibWorkflowEngineLog.log_type == 40).all()
         for log in objectlog:
             write_message(log.message)
@@ -127,27 +157,10 @@ def task_run_core():
 
         write_message("Execution time :" + str(execution_time))
 
-        raise e
-        # The workflow already waits for all its children to finish
-    # We just need to check that they have not failed
-
-    workflowlog = BibWorkflowEngineLog.query.filter(BibWorkflowEngineLog.id_object == workflow.uuid).all()
-
-    for log in workflowlog:
-        write_message(log.message)
-    execution_time = round(time.time() - start_time, 2)
-    write_message("Execution time :" + str(execution_time))
-
-    #For each File
-
-    # 0: no error
-    # 1: "recoverable" error (don't stop queue)
-    # 2: error (admin intervention needed)
-    error_happened_p = 0
-
     # Generate reports
     ticket_queue = task_get_option("create-ticket-in")
     notification_email = task_get_option("notify-email-to")
+
     if ticket_queue or notification_email:
         subject, text = generate_harvest_report(repository,
                                                 harvested_identifier_list,
@@ -310,7 +323,7 @@ def main():
                                     "user=",
                                     "password=",
                                     "workflow=",
-                                  ]
+                                   ]
         )
 
 
@@ -416,29 +429,40 @@ def main():
 
     num_of_critical_parameter = 0
     num_of_critical_parameterb = 0
-    i = 0
+
     reposname = None
+
+    from invenio.modules.workflows.loader import load_workflows
+
+    available_workflows = load_workflows()
+
     for opt in sys.argv[1:]:
-        if opt in "-r"or opt in "--repository":
+        if opt in "-r" or opt in "--repository":
             num_of_critical_parameter += 1
         elif opt in "--workflow":
             num_of_critical_parameterb += 1
         if num_of_critical_parameter > 1 or num_of_critical_parameterb > 1:
             usage(1, "You can't specify twice -r or --workflow")
 
-    if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
-        from invenio.modules.workflows.loader import load_workflows
-        available_workflows = load_workflows()
-
-
+    if num_of_critical_parameter == 1:
         if "-r" in sys.argv:
             position = sys.argv.index("-r")
         else:
             position = sys.argv.index("--repository")
-
         repositories = sys.argv[position + 1].split(",")
         if len(repositories) > 1 and ("-i" in sys.argv or "--identifier" in sys.argv):
             usage(1, "It is impossible to harvest an identifier from several repositories.")
+
+    if num_of_critical_parameterb == 1:
+
+        position = sys.argv.index("--workflow")
+        workflows = sys.argv[position + 1].split(",")
+
+        for workflow_candidate in workflows:
+            if not workflow_candidate in available_workflows:
+                usage(1, "The workflow %s doesn't exist." % workflow_candidate)
+
+    if num_of_critical_parameter == 1 and num_of_critical_parameterb == 0:
 
         for name_repository in repositories:
             try:
@@ -450,13 +474,23 @@ def main():
                 usage(1, "The repository %s doesn't have a valid workflow specified." % name_repository)
 
     elif num_of_critical_parameter == 1 and num_of_critical_parameterb == 1:
-        print "FIXME"
+
+        for name_repository in repositories:
+            try:
+                OaiHARVEST.get(OaiHARVEST.name == name_repository).one()
+            except orm.exc.NoResultFound:
+                usage(1, "The repository %s doesn't exist in our database." % name_repository)
+
+        print "A workflow has been specified, overriding the repository one."
+
+
+
+    elif num_of_critical_parameter == 0 and num_of_critical_parameterb == 1:
+        o = 0
 
     task_set_option("repository", None)
     task_set_option("dates", None)
     task_set_option("workflow", None)
-    task_set_option("workflow", None)
-
     task_set_option("identifiers", None)
     task_init(authorization_action='runoaiharvest',
               authorization_msg="oaiharvest Task Submission",
@@ -525,7 +559,7 @@ def task_submit_elaborate_specific_parameter(key, value, opts, args):
     if key in ("-r", "--repository"):
         task_set_option('repository', get_repository_names(value))
     elif key in ("--workflow"):
-        task_set_option('workflow', value)
+        task_set_option('workflow', get_repository_names(value))
     elif key in ("-i", "--identifier"):
         task_set_option('identifiers', get_identifier_names(value))
     elif key in ("-d", "--dates"):
