@@ -51,13 +51,37 @@ log = bconfig.get_logger("bibclassify.text_extractor")
 _ONE_WORD = re.compile("[A-Za-z]{2,}")
 
 
+def is_pdf(document):
+    """Checks if a document is a PDF file. Returns True if is is."""
+    if not executable_exists('pdftotext'):
+        log.warning("GNU file was not found on the system. "
+                    "Switching to a weak file extension test.")
+        if document.lower().endswith(".pdf"):
+            return True
+        return False
+        # Tested with file version >= 4.10. First test is secure and works
+    # with file version 4.25. Second condition is tested for file
+    # version 4.10.
+    file_output = os.popen('file ' + re.escape(document)).read()
+    try:
+        filetype = file_output.split(":")[1]
+    except IndexError:
+        log.error("Your version of the 'file' utility seems to "
+                  "be unsupported. Please report this to cds.support@cern.ch.")
+        raise Exception('Incompatible pdftotext')
+
+    pdf = filetype.find("PDF") > -1
+    # This is how it should be done however this is incompatible with
+    # file version 4.10.
+    #os.popen('file -bi ' + document).read().find("application/pdf")
+    return pdf
+
+
 def text_lines_from_local_file(document, remote=False):
     """Returns the fulltext of the local file.
     @var document: fullpath to the file that should be read
     @var remote: boolean, if True does not count lines (gosh!)
     @return: list of lines if st was read or an empty list"""
-
-    # FIXME - this does not care if we open anything, including binary files
 
     try:
         if is_pdf(document):
@@ -107,7 +131,7 @@ def _is_english_text(text):
     @rtype:            Boolean
     """
     # Consider one word and one space.
-    avg_word_length = 5.1 + 1
+    avg_word_length = 2.55 + 1
     expected_word_number = float(len(text)) / avg_word_length
 
     words = [word
@@ -116,7 +140,7 @@ def _is_english_text(text):
 
     word_number = len(words)
 
-    return word_number > .5 * expected_word_number
+    return word_number > expected_word_number
 
 
 def text_lines_from_url(url, user_agent=""):
@@ -157,27 +181,3 @@ def executable_exists(executable):
     return False
 
 
-def is_pdf(document):
-    """Checks if a document is a PDF file. Returns True if is is."""
-    if not executable_exists('pdftotext'):
-        log.warning("GNU file was not found on the system. "
-                    "Switching to a weak file extension test.")
-        if document.lower().endswith(".pdf"):
-            return True
-        return False
-        # Tested with file version >= 4.10. First test is secure and works
-    # with file version 4.25. Second condition is tested for file
-    # version 4.10.
-    file_output = os.popen('file ' + re.escape(document)).read()
-    try:
-        filetype = file_output.split(":")[1]
-    except IndexError:
-        log.error("Your version of the 'file' utility seems to "
-                  "be unsupported. Please report this to cds.support@cern.ch.")
-        raise Exception('Incompatible pdftotext')
-
-    pdf = filetype.find("PDF") > -1
-    # This is how it should be done however this is incompatible with
-    # file version 4.10.
-    #os.popen('file -bi ' + document).read().find("application/pdf")
-    return pdf
